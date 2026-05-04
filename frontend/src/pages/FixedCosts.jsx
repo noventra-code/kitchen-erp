@@ -12,6 +12,8 @@ function formatCurrency(value) {
 function FixedCosts() {
   const [fixedCosts, setFixedCosts] = useState([]);
   const [categories, setCategories] = useState(['Rent', 'Utilities', 'Insurance', 'Salaries', 'Equipment', 'Maintenance', 'Other']);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategory, setNewCategory] = useState('');
@@ -21,32 +23,50 @@ function FixedCosts() {
     value: ''
   });
 
-  // Load from localStorage on mount
+  const token = localStorage.getItem('token');
+
+  // Load categories from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('fixedCosts');
-    if (saved) {
-      setFixedCosts(JSON.parse(saved));
-    }
     const savedCategories = localStorage.getItem('fixedCostCategories');
     if (savedCategories) {
       setCategories(JSON.parse(savedCategories));
     }
   }, []);
 
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem('fixedCosts', JSON.stringify(fixedCosts));
-  }, [fixedCosts]);
-
+  // Save categories to localStorage
   useEffect(() => {
     localStorage.setItem('fixedCostCategories', JSON.stringify(categories));
   }, [categories]);
+
+  // Fetch fixed costs from API
+  const fetchFixedCosts = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('http://localhost:3000/api/fixed-costs', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFixedCosts(data);
+      } else {
+        setError('Failed to load fixed costs');
+      }
+    } catch (err) {
+      setError('Failed to load fixed costs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFixedCosts();
+  }, []);
 
   const calculateTotal = () => {
     return fixedCosts.reduce((sum, cost) => sum + parseFloat(cost.value || 0), 0).toFixed(2);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.item || !formData.value) {
       alert('Please fill in all fields');
@@ -62,28 +82,50 @@ function FixedCosts() {
       }
     }
 
-    if (editingId) {
-      // Update existing
-      setFixedCosts(fixedCosts.map(cost => 
-        cost.id === editingId 
-          ? { ...cost, item: formData.item, type: finalType, value: parseFloat(formData.value) }
-          : cost
-      ));
-      setEditingId(null);
-    } else {
-      // Add new
-      const newCost = {
-        id: Date.now(),
-        item: formData.item,
-        type: finalType,
-        value: parseFloat(formData.value)
-      };
-      setFixedCosts([...fixedCosts, newCost]);
-    }
+    try {
+      if (editingId) {
+        // Update existing
+        const res = await fetch(`http://localhost:3000/api/fixed-costs/${editingId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            item: formData.item,
+            type: finalType,
+            value: parseFloat(formData.value)
+          })
+        });
+        if (res.ok) {
+          fetchFixedCosts();
+          setEditingId(null);
+        }
+      } else {
+        // Add new
+        const res = await fetch('http://localhost:3000/api/fixed-costs', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            item: formData.item,
+            type: finalType,
+            value: parseFloat(formData.value)
+          })
+        });
+        if (res.ok) {
+          fetchFixedCosts();
+        }
+      }
 
-    setFormData({ item: '', type: 'Rent', value: '' });
-    setShowNewCategory(false);
-    setNewCategory('');
+      setFormData({ item: '', type: 'Rent', value: '' });
+      setShowNewCategory(false);
+      setNewCategory('');
+    } catch (err) {
+      alert('Failed to save fixed cost');
+    }
   };
 
   const handleEdit = (cost) => {
@@ -99,9 +141,19 @@ function FixedCosts() {
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (confirm('Are you sure you want to delete this fixed cost?')) {
-      setFixedCosts(fixedCosts.filter(cost => cost.id !== id));
+      try {
+        const res = await fetch(`http://localhost:3000/api/fixed-costs/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          fetchFixedCosts();
+        }
+      } catch (err) {
+        alert('Failed to delete fixed cost');
+      }
     }
   };
 
@@ -123,10 +175,20 @@ function FixedCosts() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Fixed Costs</h1>
       
+      {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
+
       {/* Total Section */}
       <div className="bg-white shadow rounded-lg p-6 mb-6">
         <div className="flex items-center justify-between">

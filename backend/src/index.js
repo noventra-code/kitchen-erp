@@ -445,6 +445,73 @@ app.delete('/api/ingredients/:id', tenantMiddleware, async (req, res) => {
   }
 });
 
+// ========== FIXED COSTS ROUTES (Tenant DB) ==========
+app.get('/api/fixed-costs', tenantMiddleware, async (req, res) => {
+  try {
+    const result = await req.tenantDb.query(
+      'SELECT * FROM fixed_costs ORDER BY created_at DESC'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching fixed costs:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/fixed-costs', tenantMiddleware, async (req, res) => {
+  try {
+    const { item, type, value } = req.body;
+    const result = await req.tenantDb.query(
+      `INSERT INTO fixed_costs (item, type, value)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [item, type, value]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating fixed cost:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/fixed-costs/:id', tenantMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { item, type, value } = req.body;
+    const result = await req.tenantDb.query(
+      `UPDATE fixed_costs
+       SET item = $1, type = $2, value = $3
+       WHERE id = $4
+       RETURNING *`,
+      [item, type, value, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Fixed cost not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating fixed cost:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/fixed-costs/:id', tenantMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await req.tenantDb.query(
+      'DELETE FROM fixed_costs WHERE id = $1 RETURNING id',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Fixed cost not found' });
+    }
+    res.json({ message: 'Fixed cost deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting fixed cost:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.use('/api/master', masterAdminRoutes);
 
 app.listen(PORT, () => {
