@@ -78,26 +78,14 @@ function App() {
                       </button>
                       {(user.role === 'tenant_admin' || user.role === 'super_admin') && (
                         <button
-                          onClick={() => handleNavClick('/admin')}
+                          onClick={() => handleNavClick(user.role === 'super_admin' ? '/master-admin' : '/admin')}
                           className={`px-3 py-2 text-sm font-medium rounded-md ${
-                            location.pathname === '/admin'
+                            location.pathname === '/admin' || location.pathname === '/master-admin'
                               ? 'bg-gray-100 text-gray-900'
                               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                           }`}
                         >
-                          Tenant Admin
-                        </button>
-                      )}
-                      {user.role === 'super_admin' && (
-                        <button
-                          onClick={() => handleNavClick('/master-admin')}
-                          className={`px-3 py-2 text-sm font-medium rounded-md ${
-                            location.pathname === '/master-admin'
-                              ? 'bg-gray-100 text-gray-900'
-                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                          }`}
-                        >
-                          Master Admin
+                          {user.role === 'super_admin' ? 'Tenant Admin' : 'Admin'}
                         </button>
                       )}
                     </nav>
