@@ -37,17 +37,17 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="max-w-md w-full">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
             Kitchen ERP
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-1 text-center text-sm text-gray-600">
             Sign in to your account
           </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="mt-4 space-y-4" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
@@ -98,10 +98,8 @@ function Login() {
             </button>
           </div>
           
-          <div className="text-center text-sm text-gray-600">
-            <p>Demo credentials:</p>
-            <p>Email: admin@example.com</p>
-            <p>Password: password123</p>
+          <div className="text-center text-xs text-gray-500">
+            <p>Demo: admin@example.com / password123</p>
           </div>
         </form>
       </div>
