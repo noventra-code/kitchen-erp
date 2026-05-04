@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, useLocation, Link, useNavigate, useEffect } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Recipes from './pages/Recipes';
@@ -12,6 +12,13 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const isLoginPage = location.pathname === '/login';
+
+  // Apply saved template on load
+  useEffect(() => {
+    const savedTemplate = localStorage.getItem('selectedTemplate') || 'modern';
+    document.body.classList.remove('template-modern', 'template-red-grey');
+    document.body.classList.add(`template-${savedTemplate}`);
+  }, []);
 
   // Get user for menu visibility
   const userStr = localStorage.getItem('user');

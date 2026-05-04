@@ -15,3 +15,60 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Template: Modern (Default) - Light Grey and White */
+.template-modern body,
+body.template-modern {
+  /* Default styles - light grey/white already applied */
+}
+
+/* Template: Red & Light Grey */
+.template-red-grey body,
+body.template-red-grey {
+  /* Override blue colors to red */
+}
+
+body.template-red-grey .bg-blue-600 {
+  background-color: #dc2626 !important; /* red-600 */
+}
+
+body.template-red-grey .bg-blue-700:hover {
+  background-color: #b91c1c !important; /* red-700 */
+}
+
+body.template-red-grey .bg-blue-100 {
+  background-color: #fee2e2 !important; /* red-100 */
+}
+
+body.template-red-grey .text-blue-600 {
+  color: #dc2626 !important;
+}
+
+body.template-red-grey .text-blue-800 {
+  color: #991b1b !important;
+}
+
+body.template-red-grey .border-blue-600 {
+  border-color: #dc2626 !important;
+}
+
+body.template-red-grey .ring-blue-500 {
+  --tw-ring-color: #dc2626 !important;
+}
+
+body.template-red-grey .focus\:ring-blue-500:focus {
+  --tw-ring-color: #dc2626 !important;
+}
+
+body.template-red-grey .focus\:border-blue-500:focus {
+  border-color: #dc2626 !important;
+}
+
+/* Ensure proper background for red-grey template */
+body.template-red-grey .bg-gray-50 {
+  background-color: #f9fafb !important; /* Keep light grey */
+}
+
+body.template-red-grey .bg-white {
+  background-color: #ffffff !important;
+}

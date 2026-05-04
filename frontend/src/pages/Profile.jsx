@@ -10,7 +10,25 @@ function Profile() {
     confirm_password: ''
   });
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [selectedTemplate, setSelectedTemplate] = useState(
+    localStorage.getItem('selectedTemplate') || 'modern'
+  );
   const navigate = useNavigate();
+
+  const applyTemplate = (template) => {
+    // Remove all template classes
+    document.body.classList.remove('template-modern', 'template-red-grey');
+    // Add selected template class
+    document.body.classList.add(`template-${template}`);
+    // Save to localStorage
+    localStorage.setItem('selectedTemplate', template);
+  };
+
+  useEffect(() => {
+    // Apply saved template on load
+    const savedTemplate = localStorage.getItem('selectedTemplate') || 'modern';
+    applyTemplate(savedTemplate);
+  }, []);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -187,6 +205,61 @@ function Profile() {
               </div>
             </form>
           )}
+        </div>
+
+        {/* Template Selector Section */}
+        <div className="border-t border-gray-200 mt-6 pt-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Theme Template</h3>
+          <div className="space-y-3">
+            <label className="flex items-center space-x-3 p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+              <input
+                type="radio"
+                name="template"
+                value="modern"
+                checked={selectedTemplate === 'modern'}
+                onChange={(e) => setSelectedTemplate(e.target.value)}
+                className="h-4 w-4 text-blue-600"
+              />
+              <div>
+                <span className="block text-sm font-medium text-gray-900">Modern</span>
+                <span className="block text-xs text-gray-500">Light Grey and White colors</span>
+                <div className="mt-2 flex space-x-2">
+                  <div className="w-8 h-8 bg-gray-100 border border-gray-300 rounded"></div>
+                  <div className="w-8 h-8 bg-white border border-gray-300 rounded"></div>
+                </div>
+              </div>
+            </label>
+            
+            <label className="flex items-center space-x-3 p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+              <input
+                type="radio"
+                name="template"
+                value="red-grey"
+                checked={selectedTemplate === 'red-grey'}
+                onChange={(e) => setSelectedTemplate(e.target.value)}
+                className="h-4 w-4 text-blue-600"
+              />
+              <div>
+                <span className="block text-sm font-medium text-gray-900">Red & Light Grey</span>
+                <span className="block text-xs text-gray-500">Red accent with Light Grey background</span>
+                <div className="mt-2 flex space-x-2">
+                  <div className="w-8 h-8 bg-red-600 border border-gray-300 rounded"></div>
+                  <div className="w-8 h-8 bg-gray-200 border border-gray-300 rounded"></div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <button
+            onClick={() => {
+              localStorage.setItem('selectedTemplate', selectedTemplate);
+              applyTemplate(selectedTemplate);
+              setNotification({ show: true, message: 'Template applied successfully!', type: 'success' });
+              setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3000);
+            }}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Apply Template
+          </button>
         </div>
       </div>
     </div>
