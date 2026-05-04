@@ -1,4 +1,5 @@
-import { Routes, Route, useLocation, Link, useNavigate, useEffect } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Routes, Route, useLocation, Link, useNavigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Recipes from './pages/Recipes';
@@ -13,31 +14,37 @@ function App() {
   const navigate = useNavigate();
   const isLoginPage = location.pathname === '/login';
 
+  // Get user for menu visibility
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+
+  // Track current template
+  const [currentTemplate, setCurrentTemplate] = useState(() => {
+    return localStorage.getItem('selectedTemplate') || 'modern';
+  });
+
   // Apply saved template on load
   useEffect(() => {
     const savedTemplate = localStorage.getItem('selectedTemplate') || 'modern';
     document.body.classList.remove('template-modern', 'template-red-grey');
     document.body.classList.add(`template-${savedTemplate}`);
+    setCurrentTemplate(savedTemplate);
   }, []);
-
-  // Get user for menu visibility
-  const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : null;
 
   const handleNavClick = (path) => {
     navigate(path);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${currentTemplate === 'red-grey' ? 'bg-gray-100' : 'bg-gray-50'}`}>
       {!isLoginPage && (
         <>
           {/* Header with COG profile */}
-          <header className="bg-white shadow-sm border-b border-gray-200">
+          <header className={`${currentTemplate === 'red-grey' ? 'bg-red-600 border-red-700' : 'bg-white border-gray-200'} shadow-sm border-b`}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between items-center h-16">
                 <div className="flex items-center space-x-8">
-                  <Link to="/dashboard" className="text-xl font-bold text-gray-900">
+                  <Link to="/dashboard" className={`text-xl font-bold ${currentTemplate === 'red-grey' ? 'text-white' : 'text-gray-900'}`}>
                     Kitchen ERP
                   </Link>
                   
@@ -48,8 +55,8 @@ function App() {
                         onClick={() => handleNavClick('/dashboard')}
                         className={`px-3 py-2 text-sm font-medium rounded-md ${
                           location.pathname === '/dashboard'
-                            ? 'bg-gray-100 text-gray-900'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
+                            : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
                         }`}
                       >
                         Dashboard
@@ -58,8 +65,8 @@ function App() {
                         onClick={() => handleNavClick('/recipes')}
                         className={`px-3 py-2 text-sm font-medium rounded-md ${
                           location.pathname === '/recipes'
-                            ? 'bg-gray-100 text-gray-900'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
+                            : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
                         }`}
                       >
                         Recipes
@@ -68,8 +75,8 @@ function App() {
                         onClick={() => handleNavClick('/invoices')}
                         className={`px-3 py-2 text-sm font-medium rounded-md ${
                           location.pathname === '/invoices'
-                            ? 'bg-gray-100 text-gray-900'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
+                            : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
                         }`}
                       >
                         Invoices
@@ -78,8 +85,8 @@ function App() {
                         onClick={() => handleNavClick('/reporting')}
                         className={`px-3 py-2 text-sm font-medium rounded-md ${
                           location.pathname === '/reporting'
-                            ? 'bg-gray-100 text-gray-900'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
+                            : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
                         }`}
                       >
                         Reporting
@@ -89,8 +96,8 @@ function App() {
                           onClick={() => handleNavClick(user.role === 'super_admin' ? '/master-admin' : '/admin')}
                           className={`px-3 py-2 text-sm font-medium rounded-md ${
                             location.pathname === '/admin' || location.pathname === '/master-admin'
-                              ? 'bg-gray-100 text-gray-900'
-                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                              ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
+                              : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
                           }`}
                         >
                           {user.role === 'super_admin' ? 'Tenant Admin' : 'Admin'}
@@ -99,7 +106,7 @@ function App() {
                     </nav>
                   )}
                 </div>
-                <CogProfile />
+                <CogProfile currentTemplate={currentTemplate} />
               </div>
             </div>
           </header>

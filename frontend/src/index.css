@@ -30,6 +30,7 @@ body.template-red-grey {
 
 body.template-red-grey .bg-blue-600 {
   background-color: #dc2626 !important; /* red-600 */
+  color: white !important;
 }
 
 body.template-red-grey .bg-blue-700:hover {

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-function CogProfile() {
+function CogProfile({ currentTemplate }) {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState(null);
   const dropdownRef = useRef(null);
@@ -45,7 +45,7 @@ function CogProfile() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 text-gray-600 hover:text-gray-900 focus:outline-none"
+        className={`p-2 ${currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white' : 'text-gray-600 hover:text-gray-900'} focus:outline-none`}
         aria-label="User menu"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -5,6 +5,7 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
+const masterAdminRoutes = require('./master-admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -443,6 +444,8 @@ app.delete('/api/ingredients/:id', tenantMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+app.use('/api/master', masterAdminRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
