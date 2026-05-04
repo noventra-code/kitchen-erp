@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react';
 
+const US_STATES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
+  'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
+  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi',
+  'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico',
+  'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania',
+  'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
+  'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
+];
+
 function MasterAdmin() {
   const [tenants, setTenants] = useState([]);
   const [admins, setAdmins] = useState([]);
@@ -14,7 +24,10 @@ function MasterAdmin() {
     name: '',
     contact_first_name: '',
     contact_last_name: '',
-    address: '',
+    address_street: '',
+    address_city: '',
+    address_state: '',
+    address_zip: '',
     contact_email: '',
     contact_phone: '',
     status: 'active'
@@ -93,7 +106,10 @@ function MasterAdmin() {
           name: '',
           contact_first_name: '',
           contact_last_name: '',
-          address: '',
+          address_street: '',
+          address_city: '',
+          address_state: '',
+          address_zip: '',
           contact_email: '',
           contact_phone: '',
           status: 'active'
@@ -110,7 +126,10 @@ function MasterAdmin() {
       name: tenant.name,
       contact_first_name: tenant.contact_first_name || '',
       contact_last_name: tenant.contact_last_name || '',
-      address: tenant.address || '',
+      address_street: tenant.address_street || '',
+      address_city: tenant.address_city || '',
+      address_state: tenant.address_state || '',
+      address_zip: tenant.address_zip || '',
       contact_email: tenant.contact_email || '',
       contact_phone: tenant.contact_phone || '',
       status: tenant.status || 'active'
@@ -203,7 +222,10 @@ function MasterAdmin() {
                 name: '',
                 contact_first_name: '',
                 contact_last_name: '',
-                address: '',
+                address_street: '',
+                address_city: '',
+                address_state: '',
+                address_zip: '',
                 contact_email: '',
                 contact_phone: '',
                 status: 'active'
@@ -311,11 +333,42 @@ function MasterAdmin() {
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-sm text-gray-600">Address</label>
-                      <textarea
-                        value={tenantForm.address}
-                        onChange={(e) => setTenantForm({...tenantForm, address: e.target.value})}
-                        rows="2"
+                      <label className="block text-sm text-gray-600">Street Address</label>
+                      <input
+                        type="text"
+                        value={tenantForm.address_street}
+                        onChange={(e) => setTenantForm({...tenantForm, address_street: e.target.value})}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600">City</label>
+                      <input
+                        type="text"
+                        value={tenantForm.address_city}
+                        onChange={(e) => setTenantForm({...tenantForm, address_city: e.target.value})}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600">State</label>
+                      <select
+                        value={tenantForm.address_state}
+                        onChange={(e) => setTenantForm({...tenantForm, address_state: e.target.value})}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      >
+                        <option value="">Select State</option>
+                        {US_STATES.map(state => (
+                          <option key={state} value={state}>{state}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600">Zip Code</label>
+                      <input
+                        type="text"
+                        value={tenantForm.address_zip}
+                        onChange={(e) => setTenantForm({...tenantForm, address_zip: e.target.value})}
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                       />
                     </div>

@@ -54,7 +54,7 @@ router.get('/tenants', async (req, res) => {
 // POST /api/master/tenants - create tenant
 router.post('/tenants', async (req, res) => {
   try {
-    const { name, contact_first_name, contact_last_name, address, contact_email, contact_phone, status } = req.body;
+    const { name, contact_first_name, contact_last_name, address_street, address_city, address_state, address_zip, contact_email, contact_phone, status } = req.body;
     
     // Generate unique db_name with tenant_ prefix
     let baseDbName = name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
@@ -79,10 +79,10 @@ router.post('/tenants', async (req, res) => {
     await createTenantDatabase(dbName);
     
     const result = await mainPool.query(
-      `INSERT INTO tenants (name, db_name, contact_first_name, contact_last_name, address, contact_email, contact_phone, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO tenants (name, db_name, contact_first_name, contact_last_name, address_street, address_city, address_state, address_zip, contact_email, contact_phone, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [name, dbName, contact_first_name, contact_last_name, address, contact_email, contact_phone, status || 'active']
+      [name, dbName, contact_first_name, contact_last_name, address_street, address_city, address_state, address_zip, contact_email, contact_phone, status || 'active']
     );
     
     res.status(201).json(result.rows[0]);
@@ -96,14 +96,14 @@ router.post('/tenants', async (req, res) => {
 router.put('/tenants/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, contact_first_name, contact_last_name, address, contact_email, contact_phone, status } = req.body;
+    const { name, contact_first_name, contact_last_name, address_street, address_city, address_state, address_zip, contact_email, contact_phone, status } = req.body;
     
     const result = await mainPool.query(
       `UPDATE tenants
-       SET name = $1, contact_first_name = $2, contact_last_name = $3, address = $4, contact_email = $5, contact_phone = $6, status = $7
-       WHERE id = $8
+       SET name = $1, contact_first_name = $2, contact_last_name = $3, address_street = $4, address_city = $5, address_state = $6, address_zip = $7, contact_email = $8, contact_phone = $9, status = $10
+       WHERE id = $11
        RETURNING *`,
-      [name, contact_first_name, contact_last_name, address, contact_email, contact_phone, status, id]
+      [name, contact_first_name, contact_last_name, address_street, address_city, address_state, address_zip, contact_email, contact_phone, status, id]
     );
     
     if (result.rows.length === 0) {
