@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 
 function Profile() {
   const [user, setUser] = useState(null);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,6 +26,38 @@ function Profile() {
     }
   }, [navigate]);
 
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3000/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: user.email,
+          current_password: passwordData.current_password,
+          new_password: passwordData.new_password,
+          confirm_password: passwordData.confirm_password
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setNotification({ show: true, message: 'Password changed successfully!', type: 'success' });
+        setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+        setShowPasswordForm(false);
+        setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3000);
+      } else {
+        setNotification({ show: true, message: data.error || 'Failed to change password', type: 'error' });
+      }
+    } catch (err) {
+      setNotification({ show: true, message: 'Server error. Please try again.', type: 'error' });
+    }
+  };
+
   if (!user) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -30,6 +69,13 @@ function Profile() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">My Profile</h1>
+      
+      {/* Notification */}
+      {notification.show && (
+        <div className={`mb-4 p-4 rounded-md ${notification.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          {notification.message}
+        </div>
+      )}
       
       <div className="bg-white shadow rounded-lg p-6 max-w-2xl">
         <div className="flex items-center mb-6">
@@ -83,6 +129,64 @@ function Profile() {
               <dd className="mt-1 text-sm text-gray-900">{user.id}</dd>
             </div>
           </dl>
+        </div>
+
+        {/* Password Change Section */}
+        <div className="border-t border-gray-200 mt-6 pt-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Password</h3>
+            <button
+              onClick={() => setShowPasswordForm(!showPasswordForm)}
+              className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              {showPasswordForm ? 'Cancel' : 'Change Password'}
+            </button>
+          </div>
+
+          {showPasswordForm && (
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Current Password</label>
+                <input
+                  type="password"
+                  value={passwordData.current_password}
+                  onChange={(e) => setPasswordData({...passwordData, current_password: e.target.value})}
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">New Password</label>
+                <input
+                  type="password"
+                  value={passwordData.new_password}
+                  onChange={(e) => setPasswordData({...passwordData, new_password: e.target.value})}
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                  required
+                  minLength="6"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={passwordData.confirm_password}
+                  onChange={(e) => setPasswordData({...passwordData, confirm_password: e.target.value})}
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                  required
+                  minLength="6"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Save Password
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>
