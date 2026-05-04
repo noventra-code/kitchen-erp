@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Recipes from './pages/Recipes';
 import Invoices from './pages/Invoices';
+import FixedCosts from './pages/FixedCosts';
 import Reporting from './pages/Reporting';
 import Admin from './pages/Admin';
 import MasterAdmin from './pages/MasterAdmin';
@@ -82,6 +83,16 @@ function App() {
                         Invoices
                       </button>
                       <button
+                        onClick={() => handleNavClick('/fixed-costs')}
+                        className={`px-3 py-2 text-sm font-medium rounded-md ${
+                          location.pathname === '/fixed-costs'
+                            ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
+                            : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
+                        }`}
+                      >
+                        Fixed Costs
+                      </button>
+                      <button
                         onClick={() => handleNavClick('/reporting')}
                         className={`px-3 py-2 text-sm font-medium rounded-md ${
                           location.pathname === '/reporting'
@@ -120,6 +131,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/invoices" element={<Invoices />} />
+          <Route path="/fixed-costs" element={<FixedCosts />} />
           <Route path="/reporting" element={<Reporting />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/master-admin" element={<MasterAdmin />} />
