@@ -44,6 +44,7 @@ function MasterAdmin() {
   
   // Admin modal
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminTenantFilter, setAdminTenantFilter] = useState('');
   const [adminForm, setAdminForm] = useState({
     first_name: '',
     last_name: '',
@@ -124,7 +125,7 @@ function MasterAdmin() {
           contact_phone: '',
           status: 'active'
         });
-        // Automatically open admin modal with new tenant pre-selected
+        // Automatically open admin modal with blank fields
         setAdminForm({
           first_name: '',
           last_name: '',
@@ -132,7 +133,7 @@ function MasterAdmin() {
           phone: '',
           password: '',
           confirm_password: '',
-          tenant_ids: [newTenant.id]
+          tenant_ids: []
         });
         setShowAdminModal(true);
       }
@@ -529,8 +530,18 @@ function MasterAdmin() {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Assign to Tenants</label>
+                  <input
+                    type="text"
+                    placeholder="Filter tenants..."
+                    value={adminTenantFilter}
+                    onChange={(e) => setAdminTenantFilter(e.target.value)}
+                    className="mb-2 px-3 py-2 border border-gray-300 rounded-md w-48 text-sm"
+                  />
                   <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2">
-                    {tenants.map(tenant => (
+                    {tenants.filter(t => 
+                      t.name.toLowerCase().includes(adminTenantFilter.toLowerCase()) ||
+                      (t.contact_email && t.contact_email.toLowerCase().includes(adminTenantFilter.toLowerCase()))
+                    ).map(tenant => (
                       <label key={tenant.id} className="flex items-center space-x-2 py-1">
                         <input
                           type="checkbox"
