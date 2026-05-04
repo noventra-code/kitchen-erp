@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Main Database - stores tenant metadata, users, master recipes
   main-db:
