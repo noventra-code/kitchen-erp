@@ -1,7 +1,6 @@
 import { useLocation, Link } from 'react-router-dom';
 
 const routeNames = {
-  '/': 'Dashboard',
   '/recipes': 'Recipes',
   '/invoices': 'Invoices',
   '/reporting': 'Reporting',
@@ -13,12 +12,17 @@ function Breadcrumbs() {
   const location = useLocation();
   const pathnames = location.pathname.split('/').filter((x) => x);
 
+  // Don't show breadcrumbs on dashboard (home page)
+  if (location.pathname === '/dashboard' || location.pathname === '/') {
+    return null;
+  }
+
   return (
     <nav className="flex" aria-label="Breadcrumb">
       <ol className="inline-flex items-center space-x-1 md:space-x-3">
         <li className="inline-flex items-center">
           <Link
-            to="/"
+            to="/dashboard"
             className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600"
           >
             <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -30,6 +34,10 @@ function Breadcrumbs() {
         {pathnames.map((value, index) => {
           const to = `/${pathnames.slice(0, index + 1).join('/')}`;
           const isLast = index === pathnames.length - 1;
+          const routeName = routeNames[to] || value;
+
+          // Skip if it's the dashboard (already shown)
+          if (value === 'dashboard') return null;
 
           return (
             <li key={to}>
@@ -39,14 +47,14 @@ function Breadcrumbs() {
                 </svg>
                 {isLast ? (
                   <span className="ml-1 text-sm font-medium text-gray-500 md:ml-2">
-                    {routeNames[to] || value}
+                    {routeName}
                   </span>
                 ) : (
                   <Link
                     to={to}
                     className="ml-1 text-sm font-medium text-gray-700 hover:text-blue-600 md:ml-2"
                   >
-                    {routeNames[to] || value}
+                    {routeName}
                   </Link>
                 )}
               </div>

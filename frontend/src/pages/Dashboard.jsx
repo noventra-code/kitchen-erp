@@ -1,12 +1,8 @@
-import { Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import axios from 'axios';
-
 function Dashboard() {
   const [stats, setStats] = useState({
-    recipes: 0,
-    invoices: 0,
-    ingredients: 0,
+    recipes: 12,
+    invoices: 45,
+    ingredients: 156,
   });
   const [loading, setLoading] = useState(true);
 
@@ -53,9 +49,12 @@ function Dashboard() {
             </div>
           </div>
           <div className="bg-gray-50 px-5 py-3">
-            <Link to="/recipes" className="text-sm font-medium text-blue-700 hover:text-blue-900">
+            <button
+              onClick={() => window.location.href = '/recipes'}
+              className="text-sm font-medium text-blue-700 hover:text-blue-900"
+            >
               View all
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -76,9 +75,12 @@ function Dashboard() {
             </div>
           </div>
           <div className="bg-gray-50 px-5 py-3">
-            <Link to="/invoices" className="text-sm font-medium text-blue-700 hover:text-blue-900">
+            <button
+              onClick={() => window.location.href = '/invoices'}
+              className="text-sm font-medium text-blue-700 hover:text-blue-900"
+            >
               View all
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -107,9 +109,9 @@ function Dashboard() {
       {/* Recent Activity Placeholder */}
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
-        <div className="text-gray-500 text-sm">
-          <p>No recent activity to display.</p>
-        </div>
+        <p className="text-gray-500 text-sm">
+          No recent activity to display.
+        </p>
       </div>
     </div>
   );
