@@ -10,6 +10,15 @@ const US_STATES = [
   'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
 ];
 
+// Phone number formatter: (XXX) XXX-XXXX
+function formatPhoneNumber(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 10);
+  if (digits.length === 0) return '';
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 function MasterAdmin() {
   const [tenants, setTenants] = useState([]);
   const [admins, setAdmins] = useState([]);
@@ -99,6 +108,7 @@ function MasterAdmin() {
       });
       
       if (res.ok) {
+        const newTenant = await res.json();
         fetchTenants();
         setShowTenantModal(false);
         setEditingTenant(null);
@@ -114,6 +124,17 @@ function MasterAdmin() {
           contact_phone: '',
           status: 'active'
         });
+        // Automatically open admin modal with new tenant pre-selected
+        setAdminForm({
+          first_name: '',
+          last_name: '',
+          email: '',
+          phone: '',
+          password: '',
+          confirm_password: '',
+          tenant_ids: [newTenant.id]
+        });
+        setShowAdminModal(true);
       }
     } catch (err) {
       alert('Failed to save tenant');
@@ -386,7 +407,8 @@ function MasterAdmin() {
                       <input
                         type="tel"
                         value={tenantForm.contact_phone}
-                        onChange={(e) => setTenantForm({...tenantForm, contact_phone: e.target.value})}
+                        onChange={(e) => setTenantForm({...tenantForm, contact_phone: formatPhoneNumber(e.target.value)})}
+                        placeholder="(123) 456-7890"
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                       />
                     </div>
@@ -404,19 +426,6 @@ function MasterAdmin() {
                     <option value="active">Active</option>
                     <option value="suspended">Suspended</option>
                   </select>
-                </div>
-                
-                {/* Create Tenant Admin Button */}
-                <div className="border-t pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAdminModal(true);
-                    }}
-                    className="px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50"
-                  >
-                    + Create Tenant Admin
-                  </button>
                 </div>
               </div>
               
@@ -489,7 +498,8 @@ function MasterAdmin() {
                   <input
                     type="tel"
                     value={adminForm.phone}
-                    onChange={(e) => setAdminForm({...adminForm, phone: e.target.value})}
+                    onChange={(e) => setAdminForm({...adminForm, phone: formatPhoneNumber(e.target.value)})}
+                    placeholder="(123) 456-7890"
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
