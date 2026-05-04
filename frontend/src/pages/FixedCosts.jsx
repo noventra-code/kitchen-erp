@@ -14,6 +14,7 @@ function FixedCosts() {
   const [categories, setCategories] = useState(['Rent', 'Utilities', 'Insurance', 'Salaries', 'Equipment', 'Maintenance', 'Other']);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategory, setNewCategory] = useState('');
@@ -42,24 +43,39 @@ function FixedCosts() {
   const fetchFixedCosts = async () => {
     try {
       setLoading(true);
+      setError(null);
+      console.log('Fetching fixed costs from API...');
       const res = await fetch('http://localhost:3000/api/fixed-costs', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
+      console.log('GET response status:', res.status);
       if (res.ok) {
         const data = await res.json();
+        console.log('Fetched fixed costs:', data);
         setFixedCosts(data);
       } else {
-        setError('Failed to load fixed costs');
+        const errorData = await res.json();
+        console.error('Failed to load fixed costs:', errorData);
+        setError(errorData.error || 'Failed to load fixed costs');
       }
     } catch (err) {
-      setError('Failed to load fixed costs');
+      console.error('Error fetching fixed costs:', err);
+      setError('Failed to load fixed costs: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchFixedCosts();
+    if (token) {
+      fetchFixedCosts();
+    } else {
+      setError('No authentication token found. Please log in again.');
+      setLoading(false);
+    }
   }, []);
 
   const calculateTotal = () => {
@@ -68,6 +84,8 @@ function FixedCosts() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaveError(null);
+    
     if (!formData.item || !formData.value) {
       alert('Please fill in all fields');
       return;
@@ -83,52 +101,55 @@ function FixedCosts() {
     }
 
     try {
-      if (editingId) {
-        // Update existing
-        const res = await fetch(`http://localhost:3000/api/fixed-costs/${editingId}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            item: formData.item,
-            type: finalType,
-            value: parseFloat(formData.value)
-          })
-        });
-        if (res.ok) {
-          fetchFixedCosts();
-          setEditingId(null);
-        }
+      const url = editingId 
+        ? `http://localhost:3000/api/fixed-costs/${editingId}`
+        : 'http://localhost:3000/api/fixed-costs';
+      
+      const method = editingId ? 'PUT' : 'POST';
+      
+      const body = {
+        item: formData.item,
+        type: finalType,
+        value: parseFloat(formData.value)
+      };
+      
+      console.log(`Saving fixed cost via ${method}:`, body);
+      
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      
+      console.log('Save response status:', res.status);
+      const responseData = await res.json();
+      console.log('Save response:', responseData);
+      
+      if (res.ok) {
+        console.log('Save successful, refreshing list...');
+        await fetchFixedCosts();
+        setEditingId(null);
+        setFormData({ item: '', type: 'Rent', value: '' });
+        setShowNewCategory(false);
+        setNewCategory('');
       } else {
-        // Add new
-        const res = await fetch('http://localhost:3000/api/fixed-costs', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            item: formData.item,
-            type: finalType,
-            value: parseFloat(formData.value)
-          })
-        });
-        if (res.ok) {
-          fetchFixedCosts();
-        }
+        const errorMsg = responseData.error || 'Failed to save fixed cost';
+        console.error('Save failed:', errorMsg);
+        setSaveError(errorMsg);
+        alert('Error: ' + errorMsg);
       }
-
-      setFormData({ item: '', type: 'Rent', value: '' });
-      setShowNewCategory(false);
-      setNewCategory('');
     } catch (err) {
-      alert('Failed to save fixed cost');
+      console.error('Error saving fixed cost:', err);
+      setSaveError(err.message);
+      alert('Error: ' + err.message);
     }
   };
 
   const handleEdit = (cost) => {
+    console.log('Editing fixed cost:', cost);
     setEditingId(cost.id);
     setFormData({
       item: cost.item,
@@ -144,15 +165,21 @@ function FixedCosts() {
   const handleDelete = async (id) => {
     if (confirm('Are you sure you want to delete this fixed cost?')) {
       try {
+        console.log('Deleting fixed cost:', id);
         const res = await fetch(`http://localhost:3000/api/fixed-costs/${id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        console.log('Delete response status:', res.status);
         if (res.ok) {
           fetchFixedCosts();
+        } else {
+          const errorData = await res.json();
+          alert('Error: ' + (errorData.error || 'Failed to delete'));
         }
       } catch (err) {
-        alert('Failed to delete fixed cost');
+        console.error('Error deleting fixed cost:', err);
+        alert('Error: ' + err.message);
       }
     }
   };
@@ -162,6 +189,7 @@ function FixedCosts() {
     setFormData({ item: '', type: 'Rent', value: '' });
     setShowNewCategory(false);
     setNewCategory('');
+    setSaveError(null);
   };
 
   const handleTypeChange = (e) => {
@@ -188,6 +216,7 @@ function FixedCosts() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Fixed Costs</h1>
       
       {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
+      {saveError && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">Save Error: {saveError}</div>}
 
       {/* Total Section */}
       <div className="bg-white shadow rounded-lg p-6 mb-6">
@@ -334,6 +363,11 @@ function FixedCosts() {
             </table>
           </div>
         )}
+      </div>
+      
+      {/* Debug info - remove in production */}
+      <div className="mt-4 text-xs text-gray-500">
+        <p>Debug: {fixedCosts.length} items loaded | Token exists: {token ? 'YES' : 'NO'}</p>
       </div>
     </div>
   );
