@@ -1,9 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
+// Format number with commas for thousands
+function formatCurrency(value) {
+  return parseFloat(value || 0).toLocaleString('en-US', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  });
+}
+
 function FixedCosts() {
   const [fixedCosts, setFixedCosts] = useState([]);
+  const [categories, setCategories] = useState(['Rent', 'Utilities', 'Insurance', 'Salaries', 'Equipment', 'Maintenance', 'Other']);
   const [editingId, setEditingId] = useState(null);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
   const [formData, setFormData] = useState({
     item: '',
     type: 'Rent',
@@ -16,14 +27,20 @@ function FixedCosts() {
     if (saved) {
       setFixedCosts(JSON.parse(saved));
     }
+    const savedCategories = localStorage.getItem('fixedCostCategories');
+    if (savedCategories) {
+      setCategories(JSON.parse(savedCategories));
+    }
   }, []);
 
-  // Save to localStorage whenever fixedCosts changes
+  // Save to localStorage whenever data changes
   useEffect(() => {
     localStorage.setItem('fixedCosts', JSON.stringify(fixedCosts));
   }, [fixedCosts]);
 
-  const costTypes = ['Rent', 'Utilities', 'Insurance', 'Salaries', 'Equipment', 'Maintenance', 'Other'];
+  useEffect(() => {
+    localStorage.setItem('fixedCostCategories', JSON.stringify(categories));
+  }, [categories]);
 
   const calculateTotal = () => {
     return fixedCosts.reduce((sum, cost) => sum + parseFloat(cost.value || 0), 0).toFixed(2);
@@ -36,11 +53,20 @@ function FixedCosts() {
       return;
     }
 
+    // If "Other" is selected and there's a new category, use that
+    let finalType = formData.type;
+    if (formData.type === 'Other' && newCategory.trim()) {
+      finalType = newCategory.trim();
+      if (!categories.includes(finalType)) {
+        setCategories([...categories, finalType]);
+      }
+    }
+
     if (editingId) {
       // Update existing
       setFixedCosts(fixedCosts.map(cost => 
         cost.id === editingId 
-          ? { ...cost, ...formData, value: parseFloat(formData.value) }
+          ? { ...cost, item: formData.item, type: finalType, value: parseFloat(formData.value) }
           : cost
       ));
       setEditingId(null);
@@ -48,13 +74,16 @@ function FixedCosts() {
       // Add new
       const newCost = {
         id: Date.now(),
-        ...formData,
+        item: formData.item,
+        type: finalType,
         value: parseFloat(formData.value)
       };
       setFixedCosts([...fixedCosts, newCost]);
     }
 
     setFormData({ item: '', type: 'Rent', value: '' });
+    setShowNewCategory(false);
+    setNewCategory('');
   };
 
   const handleEdit = (cost) => {
@@ -64,6 +93,10 @@ function FixedCosts() {
       type: cost.type,
       value: cost.value.toString()
     });
+    // If the cost type is not in default categories, it's a custom one
+    if (!categories.includes(cost.type)) {
+      setCategories([...categories, cost.type]);
+    }
   };
 
   const handleDelete = (id) => {
@@ -75,6 +108,19 @@ function FixedCosts() {
   const handleCancel = () => {
     setEditingId(null);
     setFormData({ item: '', type: 'Rent', value: '' });
+    setShowNewCategory(false);
+    setNewCategory('');
+  };
+
+  const handleTypeChange = (e) => {
+    const selected = e.target.value;
+    if (selected === 'Add New...') {
+      setShowNewCategory(true);
+      setFormData({...formData, type: 'Other'});
+    } else {
+      setShowNewCategory(false);
+      setFormData({...formData, type: selected});
+    }
   };
 
   return (
@@ -85,7 +131,7 @@ function FixedCosts() {
       <div className="bg-white shadow rounded-lg p-6 mb-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium text-gray-700">Total Fixed Costs</h2>
-          <div className="text-3xl font-bold text-blue-600">${calculateTotal()}</div>
+          <div className="text-3xl font-bold text-blue-600">${formatCurrency(calculateTotal())}</div>
         </div>
       </div>
 
@@ -110,14 +156,25 @@ function FixedCosts() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Type of Cost</label>
               <select
-                value={formData.type}
-                onChange={(e) => setFormData({...formData, type: e.target.value})}
+                value={showNewCategory ? 'Other' : formData.type}
+                onChange={handleTypeChange}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {costTypes.map(type => (
+                {categories.map(type => (
                   <option key={type} value={type}>{type}</option>
                 ))}
+                <option value="Add New...">Add New...</option>
               </select>
+              {showNewCategory && (
+                <input
+                  type="text"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="Enter new category"
+                  className="mt-2 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoFocus
+                />
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Value ($)</label>
@@ -160,6 +217,8 @@ function FixedCosts() {
             onClick={() => {
               setEditingId(null);
               setFormData({ item: '', type: 'Rent', value: '' });
+              setShowNewCategory(false);
+              setNewCategory('');
             }}
             className="px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50"
           >
@@ -185,7 +244,7 @@ function FixedCosts() {
                   <tr key={cost.id}>
                     <td className="py-3">{cost.item}</td>
                     <td className="py-3 text-sm text-gray-600">{cost.type}</td>
-                    <td className="py-3 text-right font-medium">${parseFloat(cost.value).toFixed(2)}</td>
+                    <td className="py-3 text-right font-medium">${formatCurrency(cost.value)}</td>
                     <td className="py-3 text-center">
                       <button
                         onClick={() => handleEdit(cost)}
@@ -206,7 +265,7 @@ function FixedCosts() {
               <tfoot>
                 <tr className="border-t-2 border-gray-300">
                   <td colSpan="2" className="py-3 text-right font-bold">Total:</td>
-                  <td className="py-3 text-right font-bold text-blue-600">${calculateTotal()}</td>
+                  <td className="py-3 text-right font-bold text-blue-600">${formatCurrency(calculateTotal())}</td>
                   <td></td>
                 </tr>
               </tfoot>
