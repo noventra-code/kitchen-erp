@@ -57,19 +57,19 @@ CREATE TABLE IF NOT EXISTS labor_rates (
 -- Fixed costs table (overhead)
 CREATE TABLE IF NOT EXISTS fixed_costs (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    amount DECIMAL(10,2) NOT NULL,
-    allocation_type VARCHAR(50) CHECK (allocation_type IN ('per_recipe', 'per_month', 'per_service')),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    item VARCHAR(255) NOT NULL,
+    type VARCHAR(100) NOT NULL,
+    value DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default labor rates
-INSERT INTO labor_rates (role, hourly_rate) VALUES
-('Prep Cook', 15.00),
-('Line Cook', 18.00),
-('Sous Chef', 22.00),
-('Head Chef', 28.00)
+-- Insert sample fixed costs
+INSERT INTO fixed_costs (item, type, value) VALUES
+('Rent', 'Rent', 5000.00),
+('Utilities', 'Utilities', 800.00),
+('Insurance', 'Insurance', 400.00),
+('Equipment Depreciation', 'Equipment', 200.00)
 ON CONFLICT DO NOTHING;
 
 -- Insert sample fixed costs
