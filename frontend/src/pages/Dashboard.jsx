@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 function Dashboard() {
   const [stats, setStats] = useState({
     recipes: 12,
