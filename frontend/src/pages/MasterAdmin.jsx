@@ -109,7 +109,7 @@ function MasterAdmin() {
       });
       
       if (res.ok) {
-        const newTenant = await res.json();
+        const savedTenant = await res.json();
         fetchTenants();
         setShowTenantModal(false);
         setEditingTenant(null);
@@ -125,17 +125,19 @@ function MasterAdmin() {
           contact_phone: '',
           status: 'active'
         });
-        // Automatically open admin modal with blank fields
-        setAdminForm({
-          first_name: '',
-          last_name: '',
-          email: '',
-          phone: '',
-          password: '',
-          confirm_password: '',
-          tenant_ids: []
-        });
-        setShowAdminModal(true);
+        // Only auto-open admin modal for NEW tenants (not when editing)
+        if (!editingTenant) {
+          setAdminForm({
+            first_name: '',
+            last_name: '',
+            email: '',
+            phone: '',
+            password: '',
+            confirm_password: '',
+            tenant_ids: []
+          });
+          setShowAdminModal(true);
+        }
       }
     } catch (err) {
       alert('Failed to save tenant');
