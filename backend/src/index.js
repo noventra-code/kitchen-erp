@@ -89,7 +89,7 @@ app.post('/api/auth/login', async (req, res) => {
     const user = result.rows[0];
     // Temporary: Allow plain text passwords for demo users
     let isValid;
-    if (user.email === 'admin@example.com' && password === 'password') {
+    if (user.email === 'admin@example.com' && password === 'password123') {
       isValid = true;
     } else if (user.email === 'superadmin@example.com' && password === 'Password') {
       isValid = true;
