@@ -6,6 +6,7 @@ import Invoices from './pages/Invoices';
 import Reporting from './pages/Reporting';
 import Admin from './pages/Admin';
 import MasterAdmin from './pages/MasterAdmin';
+import Profile from './pages/Profile';
 import CogProfile from './components/CogProfile';
 function App() {
   const location = useLocation();
@@ -108,6 +109,7 @@ function App() {
           <Route path="/reporting" element={<Reporting />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/master-admin" element={<MasterAdmin />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="/" element={<Login />} />
         </Routes>
       </main>

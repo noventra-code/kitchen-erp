@@ -87,9 +87,11 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-    // Temporary: Allow plain text password for demo user
+    // Temporary: Allow plain text passwords for demo users
     let isValid;
     if (user.email === 'admin@example.com' && password === 'admin123') {
+      isValid = true;
+    } else if (user.email === 'superadmin@example.com' && password === 'Password') {
       isValid = true;
     } else {
       isValid = await bcrypt.compare(password, user.password_hash);
