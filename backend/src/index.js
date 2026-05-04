@@ -192,9 +192,197 @@ app.get('/api/recipes', tenantMiddleware, async (req, res) => {
   }
 });
 
+app.post('/api/recipes', tenantMiddleware, async (req, res) => {
+  try {
+    const { name, description, prep_time, cook_time, servings, ingredients_json, instructions } = req.body;
+    const result = await req.tenantDb.query(
+      `INSERT INTO local_recipes (name, description, prep_time, cook_time, servings, ingredients_json, instructions)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [name, description, prep_time, cook_time, servings, ingredients_json, instructions]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating recipe:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/recipes/:id', tenantMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, prep_time, cook_time, servings, ingredients_json, instructions } = req.body;
+    const result = await req.tenantDb.query(
+      `UPDATE local_recipes
+       SET name = $1, description = $2, prep_time = $3, cook_time = $4, servings = $5, ingredients_json = $6, instructions = $7
+       WHERE id = $8
+       RETURNING *`,
+      [name, description, prep_time, cook_time, servings, ingredients_json, instructions, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating recipe:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/recipes/:id', tenantMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await req.tenantDb.query(
+      'DELETE FROM local_recipes WHERE id = $1 RETURNING id',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+    res.json({ message: 'Recipe deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting recipe:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ========== INVOICES ROUTES (Tenant DB) ==========
+app.get('/api/invoices', tenantMiddleware, async (req, res) => {
+  try {
+    const result = await req.tenantDb.query(
+      'SELECT * FROM invoices ORDER BY invoice_date DESC'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching invoices:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/invoices', tenantMiddleware, async (req, res) => {
+  try {
+    const { vendor, amount, invoice_date, due_date, status, description } = req.body;
+    const result = await req.tenantDb.query(
+      `INSERT INTO invoices (vendor, amount, invoice_date, due_date, status, description)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [vendor, amount, invoice_date, due_date, status || 'pending', description]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating invoice:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/invoices/:id', tenantMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { vendor, amount, invoice_date, due_date, status, description } = req.body;
+    const result = await req.tenantDb.query(
+      `UPDATE invoices
+       SET vendor = $1, amount = $2, invoice_date = $3, due_date = $4, status = $5, description = $6
+       WHERE id = $7
+       RETURNING *`,
+      [vendor, amount, invoice_date, due_date, status, description, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating invoice:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/invoices/:id', tenantMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await req.tenantDb.query(
+      'DELETE FROM invoices WHERE id = $1 RETURNING id',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    res.json({ message: 'Invoice deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting invoice:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ========== INGREDIENTS ROUTES (Tenant DB) ==========
+app.get('/api/ingredients', tenantMiddleware, async (req, res) => {
+  try {
+    const result = await req.tenantDb.query(
+      'SELECT * FROM ingredients ORDER BY name ASC'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching ingredients:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/ingredients', tenantMiddleware, async (req, res) => {
+  try {
+    const { name, unit, current_price, supplier } = req.body;
+    const result = await req.tenantDb.query(
+      `INSERT INTO ingredients (name, unit, current_price, supplier)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [name, unit, current_price, supplier]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating ingredient:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/ingredients/:id', tenantMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, unit, current_price, supplier } = req.body;
+    const result = await req.tenantDb.query(
+      `UPDATE ingredients
+       SET name = $1, unit = $2, current_price = $3, supplier = $4
+       WHERE id = $5
+       RETURNING *`,
+      [name, unit, current_price, supplier, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Ingredient not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating ingredient:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/ingredients/:id', tenantMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await req.tenantDb.query(
+      'DELETE FROM ingredients WHERE id = $1 RETURNING id',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Ingredient not found' });
+    }
+    res.json({ message: 'Ingredient deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting ingredient:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 app.listen(PORT, () => {

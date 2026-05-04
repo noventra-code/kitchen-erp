@@ -2,23 +2,48 @@ import { useState, useEffect } from 'react';
 
 function Dashboard() {
   const [stats, setStats] = useState({
-    recipes: 12,
-    invoices: 45,
-    ingredients: 156,
+    recipes: 0,
+    invoices: 0,
+    ingredients: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Mock data for now - will connect to real API later
-    setTimeout(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const [recipesRes, invoicesRes, ingredientsRes] = await Promise.all([
+        fetch('http://localhost:3000/api/recipes', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch('http://localhost:3000/api/invoices', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch('http://localhost:3000/api/ingredients', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
+      const recipes = await recipesRes.json();
+      const invoices = await invoicesRes.json();
+      const ingredients = await ingredientsRes.json();
+
       setStats({
-        recipes: 12,
-        invoices: 45,
-        ingredients: 156,
+        recipes: Array.isArray(recipes) ? recipes.length : 0,
+        invoices: Array.isArray(invoices) ? invoices.length : 0,
+        ingredients: Array.isArray(ingredients) ? ingredients.length : 0,
       });
       setLoading(false);
-    }, 500);
-  }, []);
+    } catch (err) {
+      setError('Failed to load dashboard stats');
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -31,6 +56,8 @@ function Dashboard() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+      
+      {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
       
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -103,7 +130,12 @@ function Dashboard() {
             </div>
           </div>
           <div className="bg-gray-50 px-5 py-3">
-            <span className="text-sm font-medium text-gray-500">Tracked items</span>
+            <button
+              onClick={() => window.location.href = '/recipes'}
+              className="text-sm font-medium text-blue-700 hover:text-blue-900"
+            >
+              Manage
+            </button>
           </div>
         </div>
       </div>
