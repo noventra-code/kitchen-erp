@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Main Database - stores tenant metadata, users, master recipes
+  main-db:
+    image: postgres:15-alpine
+    container_name: kitchen-erp-main-db
+    environment:
+      POSTGRES_DB: kitchen_erp_main
+      POSTGRES_USER: erp_admin
+      POSTGRES_PASSWORD: erp_secure_password_123
+    ports:
+      - "5432:5432"
+    volumes:
+      - main-db-data:/var/lib/postgresql/data
+      - ./database/main/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_admin -d kitchen_erp_main"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Tenant Database Template - will be cloned for new tenants
+  tenant-db-template:
+    image: postgres:15-alpine
+    container_name: kitchen-erp-tenant-template
+    environment:
+      POSTGRES_DB: tenant_template
+      POSTGRES_USER: erp_admin
+      POSTGRES_PASSWORD: erp_secure_password_123
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./database/tenant/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_admin -d tenant_template"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API Service
+  backend:
+    build: ./backend
+    container_name: kitchen-erp-backend
+    depends_on:
+      main-db:
+        condition: service_healthy
+      tenant-db-template:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      MAIN_DB_HOST: main-db
+      MAIN_DB_PORT: 5432
+      MAIN_DB_NAME: kitchen_erp_main
+      MAIN_DB_USER: erp_admin
+      MAIN_DB_PASSWORD: erp_secure_password_123
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      PORT: 3000
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+    restart: unless-stopped
+
+  # Frontend React App
+  frontend:
+    build: ./frontend
+    container_name: kitchen-erp-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0
+    restart: unless-stopped
+
+volumes:
+  main-db-data:
