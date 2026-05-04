@@ -16,12 +16,7 @@ function Login() {
       const userStr = localStorage.getItem('user');
       if (userStr) {
         try {
-          const user = JSON.parse(userStr);
-          if (user.role === 'super_admin') {
-            navigate('/master-admin');
-          } else {
-            navigate('/dashboard');
-          }
+          navigate('/dashboard');
         } catch (e) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
@@ -44,12 +39,8 @@ function Login() {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       
-      // Redirect based on role
-      if (response.data.user.role === 'super_admin') {
-        navigate('/master-admin');
-      } else {
-        navigate('/dashboard');
-      }
+      // Always redirect to dashboard
+      navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please try again.');
     } finally {
