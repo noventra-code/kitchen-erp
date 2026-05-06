@@ -253,6 +253,8 @@ function Profile() {
             onClick={() => {
               localStorage.setItem('selectedTemplate', selectedTemplate);
               applyTemplate(selectedTemplate);
+              // Notify other components about template change
+              window.dispatchEvent(new CustomEvent('templateChanged', { detail: { template: selectedTemplate } }));
               setNotification({ show: true, message: 'Template applied successfully!', type: 'success' });
               setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3000);
             }}

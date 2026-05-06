@@ -111,7 +111,7 @@ function Login() {
           </div>
           
           <div className="text-center text-xs text-gray-500">
-            <p>Demo: admin@example.com / password123</p>
+            <p>Demo: admin@example.com / password</p>
           </div>
         </form>
       </div>

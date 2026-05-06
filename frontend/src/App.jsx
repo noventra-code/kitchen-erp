@@ -3,13 +3,19 @@ import { Routes, Route, useLocation, Link, useNavigate } from 'react-router-dom'
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Recipes from './pages/Recipes';
+import RecipeCsvImport from './pages/RecipeCsvImport';
 import Invoices from './pages/Invoices';
+import InvoiceNew from './pages/InvoiceNew';
+import InvoiceView from './pages/InvoiceView';
+import InvoiceEdit from './pages/InvoiceEdit';
+import RecipeMappings from './pages/RecipeMappings';
 import FixedCosts from './pages/FixedCosts';
 import Reporting from './pages/Reporting';
 import Admin from './pages/Admin';
 import MasterAdmin from './pages/MasterAdmin';
 import Profile from './pages/Profile';
 import CogProfile from './components/CogProfile';
+import ErrorBoundary from './components/ErrorBoundary';
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -30,6 +36,19 @@ function App() {
     document.body.classList.remove('template-modern', 'template-red-grey');
     document.body.classList.add(`template-${savedTemplate}`);
     setCurrentTemplate(savedTemplate);
+  }, []);
+
+  // Listen for template changes from other components (e.g., Profile page)
+  useEffect(() => {
+    const handleTemplateChange = (event) => {
+      const newTemplate = event.detail.template;
+      document.body.classList.remove('template-modern', 'template-red-grey');
+      document.body.classList.add(`template-${newTemplate}`);
+      setCurrentTemplate(newTemplate);
+    };
+
+    window.addEventListener('templateChanged', handleTemplateChange);
+    return () => window.removeEventListener('templateChanged', handleTemplateChange);
   }, []);
 
   const handleNavClick = (path) => {
@@ -75,7 +94,7 @@ function App() {
                       <button
                         onClick={() => handleNavClick('/invoices')}
                         className={`px-3 py-2 text-sm font-medium rounded-md ${
-                          location.pathname === '/invoices'
+                          location.pathname.startsWith('/invoices')
                             ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
                             : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
                         }`}
@@ -103,16 +122,33 @@ function App() {
                         Reporting
                       </button>
                       {(user.role === 'tenant_admin' || user.role === 'super_admin') && (
-                        <button
-                          onClick={() => handleNavClick(user.role === 'super_admin' ? '/master-admin' : '/admin')}
-                          className={`px-3 py-2 text-sm font-medium rounded-md ${
-                            location.pathname === '/admin' || location.pathname === '/master-admin'
-                              ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
-                              : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
-                          }`}
-                        >
-                          {user.role === 'super_admin' ? 'Tenant Admin' : 'Admin'}
-                        </button>
+                        <>
+                          {/* Tenant Admin button - visible to super_admin and tenant_admin */}
+                          <button
+                            onClick={() => handleNavClick(user.role === 'super_admin' ? '/master-admin' : '/admin')}
+                            className={`px-3 py-2 text-sm font-medium rounded-md ${
+                              location.pathname === '/admin' || location.pathname === '/master-admin'
+                                ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
+                                : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
+                            }`}
+                          >
+                            {user.role === 'super_admin' ? 'Tenant Admin' : 'Admin'}
+                          </button>
+                          
+                          {/* Admin button - only visible to super_admin */}
+                          {user.role === 'super_admin' && (
+                            <button
+                              onClick={() => handleNavClick('/admin')}
+                              className={`px-3 py-2 text-sm font-medium rounded-md ${
+                                location.pathname === '/admin'
+                                  ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
+                                  : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
+                              }`}
+                            >
+                              Admin
+                            </button>
+                          )}
+                        </>
                       )}
                     </nav>
                   )}
@@ -126,18 +162,24 @@ function App() {
 
       {/* Main Content */}
       <main className={isLoginPage ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/recipes" element={<Recipes />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/fixed-costs" element={<FixedCosts />} />
-          <Route path="/reporting" element={<Reporting />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/master-admin" element={<MasterAdmin />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/" element={<Login />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/recipes" element={<Recipes />} />
+            <Route path="/recipe-csv-import" element={<RecipeCsvImport />} />
+            <Route path="/invoices" element={<Invoices />} />
+            <Route path="/invoices/new" element={<InvoiceNew />} />
+            <Route path="/invoices/:id" element={<InvoiceView />} />
+            <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
+            <Route path="/fixed-costs" element={<FixedCosts />} />
+            <Route path="/reporting" element={<Reporting />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/master-admin" element={<MasterAdmin />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/" element={<Login />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   );

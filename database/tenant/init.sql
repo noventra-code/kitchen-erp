@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS local_recipes (
     prep_time INTEGER, -- in minutes
     cook_time INTEGER, -- in minutes
     servings INTEGER,
+    category VARCHAR(100) DEFAULT 'Uncategorized', -- Recipe category
     ingredients_json JSONB,
     instructions JSONB,
     image_url VARCHAR(500),
@@ -35,14 +36,37 @@ CREATE TABLE IF NOT EXISTS ingredients (
 -- Invoices table
 CREATE TABLE IF NOT EXISTS invoices (
     id SERIAL PRIMARY KEY,
-    vendor VARCHAR(255),
     invoice_number VARCHAR(100),
-    total DECIMAL(10,2),
+    vendor_name VARCHAR(255),
+    vendor VARCHAR(255), -- Keep for backward compatibility
+    invoice_date DATE,
+    due_date DATE,
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'approved')),
+    subtotal DECIMAL(10,2) DEFAULT 0,
+    tax_amount DECIMAL(10,2) DEFAULT 0,
+    total_amount DECIMAL(10,2),
+    total DECIMAL(10,2), -- Keep for backward compatibility
+    description TEXT,
     file_url VARCHAR(500), -- Path to uploaded invoice file
     ocr_raw TEXT, -- Raw OCR output
     parsed_data JSONB, -- Structured data after OCR parsing
-    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'approved')),
-    invoice_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Invoice line items table
+CREATE TABLE IF NOT EXISTS invoice_line_items (
+    id SERIAL PRIMARY KEY,
+    invoice_id INTEGER REFERENCES invoices(id) ON DELETE CASCADE,
+    line_number INTEGER,
+    cases DECIMAL(10,2) DEFAULT 0,
+    pack_size VARCHAR(50),
+    category VARCHAR(50),
+    description TEXT,
+    quantity DECIMAL(10,2) DEFAULT 0,
+    unit_price DECIMAL(10,2) DEFAULT 0,
+    line_total DECIMAL(10,2) DEFAULT 0,
+    total DECIMAL(10,2) DEFAULT 0, -- Keep for backward compatibility
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -70,12 +94,4 @@ INSERT INTO fixed_costs (item, type, value) VALUES
 ('Utilities', 'Utilities', 800.00),
 ('Insurance', 'Insurance', 400.00),
 ('Equipment Depreciation', 'Equipment', 200.00)
-ON CONFLICT DO NOTHING;
-
--- Insert sample fixed costs
-INSERT INTO fixed_costs (name, amount, allocation_type) VALUES
-('Rent', 5000.00, 'per_month'),
-('Utilities', 800.00, 'per_month'),
-('Insurance', 400.00, 'per_month'),
-('Equipment Depreciation', 200.00, 'per_month')
 ON CONFLICT DO NOTHING;

@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 
 function Dashboard() {
   const [stats, setStats] = useState({
-    recipes: 0,
-    invoices: 0,
-    ingredients: 0,
+    recipeCount: 0,
+    totalInvoices: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,27 +16,16 @@ function Dashboard() {
     try {
       const token = localStorage.getItem('token');
       
-      const [recipesRes, invoicesRes, ingredientsRes] = await Promise.all([
-        fetch('http://localhost:3000/api/recipes', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch('http://localhost:3000/api/invoices', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch('http://localhost:3000/api/ingredients', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-      ]);
-
-      const recipes = await recipesRes.json();
-      const invoices = await invoicesRes.json();
-      const ingredients = await ingredientsRes.json();
-
-      setStats({
-        recipes: Array.isArray(recipes) ? recipes.length : 0,
-        invoices: Array.isArray(invoices) ? invoices.length : 0,
-        ingredients: Array.isArray(ingredients) ? ingredients.length : 0,
+      const response = await fetch('http://localhost:3000/api/dashboard/stats', {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load dashboard stats');
+      }
+      
+      const data = await response.json();
+      setStats(data);
       setLoading(false);
     } catch (err) {
       setError('Failed to load dashboard stats');
@@ -60,7 +48,7 @@ function Dashboard() {
       {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
       
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
@@ -72,7 +60,7 @@ function Dashboard() {
               <div className="ml-5 w-0 flex-1">
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">My Recipes</dt>
-                  <dd className="text-lg font-medium text-gray-900">{stats.recipes}</dd>
+                  <dd className="text-lg font-medium text-gray-900">{stats.recipeCount}</dd>
                 </dl>
               </div>
             </div>
@@ -98,7 +86,7 @@ function Dashboard() {
               <div className="ml-5 w-0 flex-1">
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">Invoices</dt>
-                  <dd className="text-lg font-medium text-gray-900">{stats.invoices}</dd>
+                  <dd className="text-lg font-medium text-gray-900">{stats.totalInvoices}</dd>
                 </dl>
               </div>
             </div>
@@ -112,40 +100,6 @@ function Dashboard() {
             </button>
           </div>
         </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Ingredients</dt>
-                  <dd className="text-lg font-medium text-gray-900">{stats.ingredients}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-50 px-5 py-3">
-            <button
-              onClick={() => window.location.href = '/recipes'}
-              className="text-sm font-medium text-blue-700 hover:text-blue-900"
-            >
-              Manage
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity Placeholder */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
-        <p className="text-gray-500 text-sm">
-          No recent activity to display.
-        </p>
       </div>
     </div>
   );

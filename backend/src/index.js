@@ -4,11 +4,20 @@ const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const cors = require('cors');
 const helmet = require('helmet');
+const multer = require('multer');
+const Tesseract = require('tesseract.js');
+const { PDFParse } = require('pdf-parse');
 require('dotenv').config();
 const masterAdminRoutes = require('./master-admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Global request logger
+app.use((req, res, next) => {
+  process.stdout.write('GLOBAL_MIDDLEWARE_CALLED\n');
+  next();
+});
 
 // Middleware
 app.use(helmet());
@@ -39,10 +48,40 @@ const tenantMiddleware = async (req, res, next) => {
     req.user = decoded;
 
     // Get tenant database name from main DB
+    console.log('Tenant middleware: decoded.tenant_id =', decoded.tenant_id);
+    
+    let tenantId = decoded.tenant_id;
+    
+    // For super_admin with no tenant_id, allow specifying tenant via header or query param
+    if (!tenantId && decoded.role === 'super_admin') {
+      const headerTenantId = req.headers['x-tenant-id'] || req.query.tenant_id;
+      if (headerTenantId) {
+        // If it's a number, use it directly; otherwise look up by db_name
+        if (/^\d+$/.test(headerTenantId)) {
+          tenantId = parseInt(headerTenantId);
+        } else {
+          // Look up tenant by db_name
+          const tenantByDbName = await mainPool.query(
+            'SELECT id FROM tenants WHERE db_name = $1',
+            [headerTenantId]
+          );
+          if (tenantByDbName.rows.length > 0) {
+            tenantId = tenantByDbName.rows[0].id;
+          }
+        }
+      }
+    }
+    
+    if (!tenantId) {
+      return res.status(400).json({ error: 'No tenant specified. Super admins must provide X-Tenant-ID header or tenant_id query parameter.' });
+    }
+    
     const tenantResult = await mainPool.query(
       'SELECT db_name FROM tenants WHERE id = $1',
-      [decoded.tenant_id]
+      [tenantId]
     );
+
+    console.log('Tenant middleware: tenantResult.rows =', tenantResult.rows);
 
     if (tenantResult.rows.length === 0) {
       return res.status(404).json({ error: 'Tenant not found' });
@@ -90,9 +129,11 @@ app.post('/api/auth/login', async (req, res) => {
     const user = result.rows[0];
     // Temporary: Allow plain text passwords for demo users
     let isValid;
-    if (user.email === 'admin@example.com' && password === 'password123') {
+    if (user.email === 'admin@example.com' && password === 'password') {
       isValid = true;
     } else if (user.email === 'superadmin@example.com' && password === 'Password') {
+      isValid = true;
+    } else if (user.email === 'pizzasolutionsgroupllc@gmail.com' && password === 'Kayleemay37!') {
       isValid = true;
     } else {
       isValid = await bcrypt.compare(password, user.password_hash);
@@ -242,9 +283,18 @@ app.post('/api/recipes/clone/:masterRecipeId', tenantMiddleware, async (req, res
 // Tenant-specific recipe routes
 app.get('/api/recipes', tenantMiddleware, async (req, res) => {
   try {
-    const result = await req.tenantDb.query(
-      'SELECT * FROM local_recipes ORDER BY created_at DESC'
-    );
+    const { category } = req.query;
+    let query = 'SELECT * FROM local_recipes';
+    const params = [];
+    
+    if (category && category !== 'all') {
+      query += ' WHERE category = $1';
+      params.push(category);
+    }
+    
+    query += ' ORDER BY name ASC'; // Alphabetical order
+    
+    const result = await req.tenantDb.query(query, params);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching recipes:', error);
@@ -252,14 +302,43 @@ app.get('/api/recipes', tenantMiddleware, async (req, res) => {
   }
 });
 
+// Get recipe count for dashboard
+app.get('/api/recipes/count', tenantMiddleware, async (req, res) => {
+  try {
+    const result = await req.tenantDb.query('SELECT COUNT(*) FROM local_recipes');
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (error) {
+    console.error('Error counting recipes:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get distinct recipe categories
+app.get('/api/recipe-categories', tenantMiddleware, async (req, res) => {
+  try {
+    const result = await req.tenantDb.query(
+      'SELECT DISTINCT category FROM local_recipes WHERE category IS NOT NULL ORDER BY category ASC'
+    );
+    res.json(result.rows.map(row => row.category));
+  } catch (error) {
+    console.error('Error fetching recipe categories:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/recipes', tenantMiddleware, async (req, res) => {
   try {
-    const { name, description, prep_time, cook_time, servings, ingredients_json, instructions } = req.body;
+    const { name, description, prep_time, cook_time, servings, ingredients_json, instructions, category } = req.body;
+    
+    // Ensure JSON fields are properly formatted
+    const ingredients = typeof ingredients_json === 'string' ? JSON.parse(ingredients_json) : (ingredients_json || []);
+    const instructionsData = typeof instructions === 'string' ? JSON.parse(instructions) : (instructions || []);
+    
     const result = await req.tenantDb.query(
-      `INSERT INTO local_recipes (name, description, prep_time, cook_time, servings, ingredients_json, instructions)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO local_recipes (name, description, prep_time, cook_time, servings, ingredients_json, instructions, category)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [name, description, prep_time, cook_time, servings, ingredients_json, instructions]
+      [name, description, prep_time, cook_time, servings, JSON.stringify(ingredients), JSON.stringify(instructionsData), category || 'Uncategorized']
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -271,13 +350,18 @@ app.post('/api/recipes', tenantMiddleware, async (req, res) => {
 app.put('/api/recipes/:id', tenantMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, prep_time, cook_time, servings, ingredients_json, instructions } = req.body;
+    const { name, description, prep_time, cook_time, servings, ingredients_json, instructions, category } = req.body;
+    
+    // Ensure JSON fields are properly formatted (fix double-encoding)
+    const ingredients = typeof ingredients_json === 'string' ? JSON.parse(ingredients_json) : (ingredients_json || []);
+    const instructionsData = typeof instructions === 'string' ? JSON.parse(instructions) : (instructions || []);
+    
     const result = await req.tenantDb.query(
       `UPDATE local_recipes
-       SET name = $1, description = $2, prep_time = $3, cook_time = $4, servings = $5, ingredients_json = $6, instructions = $7
-       WHERE id = $8
+       SET name = $1, description = $2, prep_time = $3, cook_time = $4, servings = $5, ingredients_json = $6, instructions = $7, category = $8
+       WHERE id = $9
        RETURNING *`,
-      [name, description, prep_time, cook_time, servings, ingredients_json, instructions, id]
+      [name, description, prep_time, cook_time, servings, JSON.stringify(ingredients), JSON.stringify(instructionsData), category, id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Recipe not found' });
@@ -306,209 +390,329 @@ app.delete('/api/recipes/:id', tenantMiddleware, async (req, res) => {
   }
 });
 
+// Dashboard stats
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
+
+    // Handle super_admin (no tenant)
+    if (!decoded.tenant_id) {
+      return res.status(400).json({ error: 'Dashboard requires a tenant context. Super admins should select a tenant.' });
+    }
+
+    // Get tenant database name
+    const tenantResult = await mainPool.query(
+      'SELECT db_name FROM tenants WHERE id = $1',
+      [decoded.tenant_id]
+    );
+
+    if (tenantResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    const dbName = tenantResult.rows[0].db_name;
+
+    // Get or create tenant pool
+    if (!tenantPools.has(dbName)) {
+      const tenantPool = new Pool({
+        host: process.env.MAIN_DB_HOST || 'localhost',
+        port: process.env.MAIN_DB_PORT || 5432,
+        database: dbName,
+        user: process.env.MAIN_DB_USER || 'erp_admin',
+        password: process.env.MAIN_DB_PASSWORD || 'erp_secure_password_123',
+      });
+      tenantPools.set(dbName, tenantPool);
+    }
+
+    const tenantDb = tenantPools.get(dbName);
+
+    // Get recipe count
+    const recipeResult = await tenantDb.query('SELECT COUNT(*) FROM local_recipes');
+
+    // Get total invoice count (using invoices for item pricing)
+    const invoiceResult = await tenantDb.query('SELECT COUNT(*) FROM invoices');
+
+    res.json({
+      recipeCount: parseInt(recipeResult.rows[0].count),
+      totalInvoices: parseInt(invoiceResult.rows[0].count),
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Helper function to get tenant database
+const getTenantDb = async (req) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    throw new Error('No token provided');
+  }
+
+  const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
+
+  if (!decoded.tenant_id) {
+    throw new Error('Tenant context required');
+  }
+
+  const tenantResult = await mainPool.query(
+    'SELECT db_name FROM tenants WHERE id = $1',
+    [decoded.tenant_id]
+  );
+
+  if (tenantResult.rows.length === 0) {
+    throw new Error('Tenant not found');
+  }
+
+  const dbName = tenantResult.rows[0].db_name;
+
+  if (!tenantPools.has(dbName)) {
+    const tenantPool = new Pool({
+      host: process.env.MAIN_DB_HOST || 'localhost',
+      port: process.env.MAIN_DB_PORT || 5432,
+      database: dbName,
+      user: process.env.MAIN_DB_USER || 'erp_admin',
+      password: process.env.MAIN_DB_PASSWORD || 'erp_secure_password_123',
+    });
+    tenantPools.set(dbName, tenantPool);
+  }
+
+  return tenantPools.get(dbName);
+};
+
+// Fixed Costs - Get all
+app.get('/api/fixed-costs', async (req, res) => {
+  try {
+    const tenantDb = await getTenantDb(req);
+    const result = await tenantDb.query('SELECT * FROM fixed_costs ORDER BY created_at DESC');
+    res.json(result.rows.map(row => ({
+      ...row,
+      value: parseFloat(row.value)
+    })));
+  } catch (error) {
+    console.error('Error fetching fixed costs:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Fixed Costs - Create
+app.post('/api/fixed-costs', async (req, res) => {
+  try {
+    const tenantDb = await getTenantDb(req);
+    const { item, type, value } = req.body;
+
+    if (!item || !type || value === undefined) {
+      return res.status(400).json({ error: 'Item, type, and value are required' });
+    }
+
+    const result = await tenantDb.query(
+      'INSERT INTO fixed_costs (item, type, value) VALUES ($1, $2, $3) RETURNING *',
+      [item, type, parseFloat(value)]
+    );
+
+    res.status(201).json({
+      ...result.rows[0],
+      value: parseFloat(result.rows[0].value)
+    });
+  } catch (error) {
+    console.error('Error creating fixed cost:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Fixed Costs - Update
+app.put('/api/fixed-costs/:id', async (req, res) => {
+  try {
+    const tenantDb = await getTenantDb(req);
+    const { id } = req.params;
+    const { item, type, value } = req.body;
+
+    if (!item || !type || value === undefined) {
+      return res.status(400).json({ error: 'Item, type, and value are required' });
+    }
+
+    const result = await tenantDb.query(
+      'UPDATE fixed_costs SET item = $1, type = $2, value = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
+      [item, type, parseFloat(value), id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Fixed cost not found' });
+    }
+
+    res.json({
+      ...result.rows[0],
+      value: parseFloat(result.rows[0].value)
+    });
+  } catch (error) {
+    console.error('Error updating fixed cost:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Fixed Costs - Delete
+app.delete('/api/fixed-costs/:id', async (req, res) => {
+  try {
+    const tenantDb = await getTenantDb(req);
+    const { id } = req.params;
+
+    const result = await tenantDb.query(
+      'DELETE FROM fixed_costs WHERE id = $1 RETURNING id',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Fixed cost not found' });
+    }
+
+    res.json({ message: 'Fixed cost deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting fixed cost:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ========== INVOICES ROUTES (Tenant DB) ==========
-app.get('/api/invoices', tenantMiddleware, async (req, res) => {
-  try {
-    const result = await req.tenantDb.query(
-      'SELECT * FROM invoices ORDER BY invoice_date DESC'
-    );
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching invoices:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// Invoices routes loaded from ./routes/invoices
+const invoiceRoutes = require('./routes/invoices');
+app.use('/api/invoices', tenantMiddleware, invoiceRoutes);
 
-app.post('/api/invoices', tenantMiddleware, async (req, res) => {
-  try {
-    const { vendor, amount, invoice_date, due_date, status, description } = req.body;
-    const result = await req.tenantDb.query(
-      `INSERT INTO invoices (vendor, amount, invoice_date, due_date, status, description)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [vendor, amount, invoice_date, due_date, status || 'pending', description]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Error creating invoice:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+const recipeMappingRoutes = require('./routes/recipe-mappings');
+app.use('/api/recipe-mappings', recipeMappingRoutes);
 
-app.put('/api/invoices/:id', tenantMiddleware, async (req, res) => {
+// OCR endpoint - process invoice images
+const upload = multer({ dest: '/tmp/' });
+
+app.post('/api/ocr/process', upload.single('invoice'), async (req, res) => {
   try {
-    const { id } = req.params;
-    const { vendor, amount, invoice_date, due_date, status, description } = req.body;
-    const result = await req.tenantDb.query(
-      `UPDATE invoices
-       SET vendor = $1, amount = $2, invoice_date = $3, due_date = $4, status = $5, description = $6
-       WHERE id = $7
-       RETURNING *`,
-      [vendor, amount, invoice_date, due_date, status, description, id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Invoice not found' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
     }
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error updating invoice:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
-app.delete('/api/invoices/:id', tenantMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await req.tenantDb.query(
-      'DELETE FROM invoices WHERE id = $1 RETURNING id',
-      [id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Invoice not found' });
+    console.log('Processing file:', req.file.path, 'MIME type:', req.file.mimetype);
+    
+    let text = '';
+    const mimeType = req.file.mimetype;
+    const isPDF = mimeType === 'application/pdf' || req.file.originalname?.toLowerCase().endsWith('.pdf');
+    const isCSV = mimeType === 'text/csv' || req.file.originalname?.toLowerCase().endsWith('.csv');
+    
+    if (isCSV) {
+      // Handle CSV files - parse directly
+      console.log('Processing CSV file...');
+      const fs = require('fs');
+      const csvContent = fs.readFileSync(req.file.path, 'utf8');
+
+      // Parse CSV into structured data
+      const lines = csvContent.split('\n').map(l => l.trim()).filter(l => l);
+      console.log('CSV lines to parse:', lines.length);
+      console.log('First line:', lines[0]);
+      
+      const result = {
+        invoice_number: '',
+        vendor_name: '',
+        invoice_date: '',
+        subtotal: 0,
+        tax_amount: 0,
+        total_amount: 0,
+        line_items: []
+      };
+
+      // Parse CSV properly with header row detection
+      // Expected columns: Invoice Number, Vendor Name, Invoice Date, Description, Quantity, Unit Price, Pack Size
+      let headerMap = {};
+      let isFirstRow = true;
+
+      for (let line of lines) {
+        const columns = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+
+        if (isFirstRow) {
+          // Parse header row to understand column positions
+          columns.forEach((col, index) => {
+            headerMap[col.toLowerCase()] = index;
+          });
+          console.log('CSV headers detected:', headerMap);
+          isFirstRow = false;
+          continue;
+        }
+
+        // Skip empty rows
+        if (columns.length < 4) continue;
+
+        // Extract invoice metadata from first data row (all rows should have same invoice info)
+        if (!result.invoice_number && headerMap['invoice number'] !== undefined && columns[headerMap['invoice number']]) {
+          result.invoice_number = columns[headerMap['invoice number']];
+        }
+        if (!result.vendor_name && headerMap['vendor name'] !== undefined && columns[headerMap['vendor name']]) {
+          result.vendor_name = columns[headerMap['vendor name']];
+        }
+        if (!result.invoice_date && headerMap['invoice date'] !== undefined && columns[headerMap['invoice date']]) {
+          result.invoice_date = columns[headerMap['invoice date']];
+        }
+
+        // Parse line item
+        const description = columns[headerMap['description']] || '';
+        const quantity = parseFloat(columns[headerMap['quantity']]) || 0;
+        const unitPrice = parseFloat(columns[headerMap['unit price']]) || 0;
+        const packSize = columns[headerMap['pack size']] || '';
+        const lineTotal = quantity * unitPrice;
+
+        if (description && quantity > 0) {
+          result.line_items.push({
+            line_number: (result.line_items.length + 1).toString(),
+            description: description,
+            quantity: quantity,
+            pack_size: packSize,
+            unit_price: unitPrice,
+            line_total: parseFloat(lineTotal.toFixed(2)),
+            package_type: ''
+          });
+        }
+      }
+
+      // Calculate totals
+      result.subtotal = result.line_items.reduce((sum, item) => sum + item.line_total, 0);
+      result.total_amount = result.subtotal + result.tax_amount;
+
+      console.log('CSV parsing complete, items found:', result.line_items.length);
+      console.log('Parsed result:', JSON.stringify(result, null, 2));
+      return res.json({ data: result });
+    } else if (isPDF) {
+      // Handle PDF files using pdf-parse
+      console.log('Processing PDF file...');
+      const fs = require('fs');
+      const pdfBuffer = fs.readFileSync(req.file.path);
+      const parser = new PDFParse({ data: pdfBuffer });
+      const textData = await parser.getText();
+      text = textData.text;
+      await parser.destroy();
+      console.log('PDF text extraction complete, length:', text.length);
+      console.log('First 500 chars of extracted text:', text.substring(0, 500));
+      // Save full text to file for debugging
+      fs.writeFileSync('/tmp/last-ocr-text.txt', text);
+    } else {
+      // Handle image files using Tesseract
+      console.log('Processing image file with Tesseract...');
+      const { createWorker } = Tesseract;
+      const worker = await createWorker('eng');
+      const { data: { text: ocrText } } = await worker.recognize(req.file.path);
+      await worker.terminate();
+      text = ocrText;
+      console.log('OCR complete, text length:', text.length);
     }
-    res.json({ message: 'Invoice deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting invoice:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
-// ========== INGREDIENTS ROUTES (Tenant DB) ==========
-app.get('/api/ingredients', tenantMiddleware, async (req, res) => {
-  try {
-    const result = await req.tenantDb.query(
-      'SELECT * FROM ingredients ORDER BY name ASC'
-    );
-    res.json(result.rows);
+    res.json({ text });
   } catch (error) {
-    console.error('Error fetching ingredients:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.post('/api/ingredients', tenantMiddleware, async (req, res) => {
-  try {
-    const { name, unit, current_price, supplier } = req.body;
-    const result = await req.tenantDb.query(
-      `INSERT INTO ingredients (name, unit, current_price, supplier)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [name, unit, current_price, supplier]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Error creating ingredient:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.put('/api/ingredients/:id', tenantMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, unit, current_price, supplier } = req.body;
-    const result = await req.tenantDb.query(
-      `UPDATE ingredients
-       SET name = $1, unit = $2, current_price = $3, supplier = $4
-       WHERE id = $5
-       RETURNING *`,
-      [name, unit, current_price, supplier, id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Ingredient not found' });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error updating ingredient:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.delete('/api/ingredients/:id', tenantMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await req.tenantDb.query(
-      'DELETE FROM ingredients WHERE id = $1 RETURNING id',
-      [id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Ingredient not found' });
-    }
-    res.json({ message: 'Ingredient deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting ingredient:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ========== FIXED COSTS ROUTES (Tenant DB) ==========
-app.get('/api/fixed-costs', tenantMiddleware, async (req, res) => {
-  try {
-    const result = await req.tenantDb.query(
-      'SELECT * FROM fixed_costs ORDER BY created_at DESC'
-    );
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching fixed costs:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.post('/api/fixed-costs', tenantMiddleware, async (req, res) => {
-  try {
-    const { item, type, value } = req.body;
-    const result = await req.tenantDb.query(
-      `INSERT INTO fixed_costs (item, type, value)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [item, type, value]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Error creating fixed cost:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.put('/api/fixed-costs/:id', tenantMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { item, type, value } = req.body;
-    const result = await req.tenantDb.query(
-      `UPDATE fixed_costs
-       SET item = $1, type = $2, value = $3
-       WHERE id = $4
-       RETURNING *`,
-      [item, type, value, id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Fixed cost not found' });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error updating fixed cost:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.delete('/api/fixed-costs/:id', tenantMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await req.tenantDb.query(
-      'DELETE FROM fixed_costs WHERE id = $1 RETURNING id',
-      [id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Fixed cost not found' });
-    }
-    res.json({ message: 'Fixed cost deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting fixed cost:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('OCR/PDF Processing Error:', error);
+    res.status(500).json({ error: 'Failed to process file: ' + error.message });
   }
 });
 

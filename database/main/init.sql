@@ -6,6 +6,15 @@ CREATE TABLE IF NOT EXISTS tenants (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     db_name VARCHAR(255) NOT NULL UNIQUE,
+    contact_first_name VARCHAR(100),
+    contact_last_name VARCHAR(100),
+    address_street VARCHAR(255),
+    address_city VARCHAR(100),
+    address_state VARCHAR(100),
+    address_zip VARCHAR(20),
+    contact_email VARCHAR(255),
+    contact_phone VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -19,6 +28,15 @@ CREATE TABLE IF NOT EXISTS users (
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create tenant_users junction table (many-to-many user-tenant relationships)
+CREATE TABLE IF NOT EXISTS tenant_users (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL DEFAULT 'tenant_admin' CHECK (role IN ('tenant_admin', 'staff')),
+    UNIQUE(user_id, tenant_id)
 );
 
 -- Create master_recipes table (global recipe library)

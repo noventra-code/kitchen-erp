@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useNotification, useModal, RibbonNotification, Modal } from '../components/NotificationSystem';
 
 // Format number with commas for thousands
 function formatCurrency(value) {
@@ -18,11 +19,16 @@ function FixedCosts() {
   const [editingId, setEditingId] = useState(null);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategory, setNewCategory] = useState('');
+  const [notification, setNotification] = useNotification();
+  const { modal, showError, showConfirm, closeModal, hideModal, setModal } = useModal();
+  
   const [formData, setFormData] = useState({
     item: '',
     type: 'Rent',
     value: ''
   });
+  const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, itemId: null });
+  const [categoryConfirm, setCategoryConfirm] = useState({ isOpen: false, category: null });
 
   const token = localStorage.getItem('token');
 
@@ -44,25 +50,20 @@ function FixedCosts() {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching fixed costs from API...');
       const res = await fetch('http://localhost:3000/api/fixed-costs', {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      console.log('GET response status:', res.status);
       if (res.ok) {
         const data = await res.json();
-        console.log('Fetched fixed costs:', data);
         setFixedCosts(data);
       } else {
         const errorData = await res.json();
-        console.error('Failed to load fixed costs:', errorData);
         setError(errorData.error || 'Failed to load fixed costs');
       }
     } catch (err) {
-      console.error('Error fetching fixed costs:', err);
       setError('Failed to load fixed costs: ' + err.message);
     } finally {
       setLoading(false);
@@ -87,7 +88,7 @@ function FixedCosts() {
     setSaveError(null);
     
     if (!formData.item || !formData.value) {
-      alert('Please fill in all fields');
+      showError('Please fill in all fields');
       return;
     }
 
@@ -113,8 +114,6 @@ function FixedCosts() {
         value: parseFloat(formData.value)
       };
       
-      console.log(`Saving fixed cost via ${method}:`, body);
-      
       const res = await fetch(url, {
         method,
         headers: {
@@ -124,64 +123,63 @@ function FixedCosts() {
         body: JSON.stringify(body)
       });
       
-      console.log('Save response status:', res.status);
-      const responseData = await res.json();
-      console.log('Save response:', responseData);
-      
       if (res.ok) {
-        console.log('Save successful, refreshing list...');
         await fetchFixedCosts();
         setEditingId(null);
         setFormData({ item: '', type: 'Rent', value: '' });
         setShowNewCategory(false);
         setNewCategory('');
+        setNotification({
+          type: 'success',
+          message: editingId ? 'Fixed cost updated successfully!' : 'Fixed cost added successfully!'
+        });
       } else {
-        const errorMsg = responseData.error || 'Failed to save fixed cost';
-        console.error('Save failed:', errorMsg);
-        setSaveError(errorMsg);
-        alert('Error: ' + errorMsg);
+        const errorMsg = await res.json();
+        showError(errorMsg.error || 'Failed to save fixed cost');
       }
     } catch (err) {
-      console.error('Error saving fixed cost:', err);
-      setSaveError(err.message);
-      alert('Error: ' + err.message);
+      showError('Error: ' + err.message);
     }
   };
 
   const handleEdit = (cost) => {
-    console.log('Editing fixed cost:', cost);
     setEditingId(cost.id);
     setFormData({
       item: cost.item,
       type: cost.type,
       value: cost.value.toString()
     });
-    // If the cost type is not in default categories, it's a custom one
     if (!categories.includes(cost.type)) {
       setCategories([...categories, cost.type]);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('Are you sure you want to delete this fixed cost?')) {
-      try {
-        console.log('Deleting fixed cost:', id);
-        const res = await fetch(`http://localhost:3000/api/fixed-costs/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
+  const handleDeleteConfirm = async () => {
+    const { itemId } = deleteConfirm;
+    try {
+      const res = await fetch(`http://localhost:3000/api/fixed-costs/${itemId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchFixedCosts();
+        setDeleteConfirm({ isOpen: false, itemId: null });
+        setNotification({
+          type: 'success',
+          message: 'Fixed cost deleted successfully!'
         });
-        console.log('Delete response status:', res.status);
-        if (res.ok) {
-          fetchFixedCosts();
-        } else {
-          const errorData = await res.json();
-          alert('Error: ' + (errorData.error || 'Failed to delete'));
-        }
-      } catch (err) {
-        console.error('Error deleting fixed cost:', err);
-        alert('Error: ' + err.message);
       }
+    } catch (err) {
+      showError('Error: ' + err.message);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm({ isOpen: false, itemId: null });
+  };
+
+  const handleDelete = (id) => {
+    setDeleteConfirm({ isOpen: true, itemId: id });
   };
 
   const handleCancel = () => {
@@ -203,6 +201,38 @@ function FixedCosts() {
     }
   };
 
+  const removeCategory = (categoryToRemove) => {
+    if (categories.filter(c => c !== 'Other').length === 0) {
+      showError('You cannot remove all categories except "Other"');
+      return;
+    }
+    setCategoryConfirm({ isOpen: true, category: categoryToRemove });
+  };
+
+  const handleCategoryConfirm = () => {
+    const { category } = categoryConfirm;
+    setCategories(categories.filter(c => c !== category));
+    setCategoryConfirm({ isOpen: false, category: null });
+  };
+
+  const handleCategoryCancel = () => {
+    setCategoryConfirm({ isOpen: false, category: null });
+  };
+
+  const addCategoryDirectly = () => {
+    const trimmed = newCategory.trim();
+    if (!trimmed) {
+      showError('Please enter a category name');
+      return;
+    }
+    if (categories.includes(trimmed)) {
+      showError('Category already exists');
+      return;
+    }
+    setCategories([...categories, trimmed]);
+    setNewCategory('');
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -213,6 +243,9 @@ function FixedCosts() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      <RibbonNotification notification={notification} onClose={() => setNotification(null)} />
+      <Modal modal={modal} onClose={closeModal} onCancel={hideModal} />
+
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Fixed Costs</h1>
       
       {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
@@ -245,27 +278,57 @@ function FixedCosts() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type of Cost</label>
-              <select
-                value={showNewCategory ? 'Other' : formData.type}
-                onChange={handleTypeChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {categories.map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-                <option value="Add New...">Add New...</option>
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Type of Cost</label>
+              <div className="flex space-x-2 mb-2">
+                <select
+                  value={showNewCategory ? 'Other' : formData.type}
+                  onChange={handleTypeChange}
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {categories.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                  <option value="Add New...">Add New...</option>
+                </select>
+              </div>
+              
+              {/* Inline Category Management */}
               {showNewCategory && (
-                <input
-                  type="text"
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  placeholder="Enter new category"
-                  className="mt-2 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoFocus
-                />
+                <div className="flex space-x-2 mb-2">
+                  <input
+                    type="text"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    placeholder="New category name"
+                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    onKeyPress={(e) => e.key === 'Enter' && addCategoryDirectly()}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={addCategoryDirectly}
+                    className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+                  >
+                    Add
+                  </button>
+                </div>
               )}
+              
+              {/* Category List with Remove */}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {categories.filter(c => c !== 'Other').map(cat => (
+                  <span key={cat} className="inline-flex items-center px-2 py-1 bg-gray-100 text-sm rounded">
+                    {cat}
+                    <button
+                      type="button"
+                      onClick={() => removeCategory(cat)}
+                      className="ml-1 text-red-500 hover:text-red-700"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Value ($)</label>
@@ -287,15 +350,13 @@ function FixedCosts() {
             >
               {editingId ? 'Update' : 'Save'}
             </button>
-            {editingId && (
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
           </div>
         </form>
       </div>
@@ -304,21 +365,10 @@ function FixedCosts() {
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-medium text-gray-900">Fixed Cost Items</h2>
-          <button
-            onClick={() => {
-              setEditingId(null);
-              setFormData({ item: '', type: 'Rent', value: '' });
-              setShowNewCategory(false);
-              setNewCategory('');
-            }}
-            className="px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50"
-          >
-            + Add Fixed Cost
-          </button>
         </div>
 
         {fixedCosts.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No fixed costs added yet. Click "+ Add Fixed Cost" to get started.</p>
+          <p className="text-gray-500 text-center py-8">No fixed costs added yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full">
@@ -353,22 +403,72 @@ function FixedCosts() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-300">
-                  <td colSpan="2" className="py-3 text-right font-bold">Total:</td>
-                  <td className="py-3 text-right font-bold text-blue-600">${formatCurrency(calculateTotal())}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         )}
       </div>
       
-      {/* Debug info - remove in production */}
-      <div className="mt-4 text-xs text-gray-500">
-        <p>Debug: {fixedCosts.length} items loaded | Token exists: {token ? 'YES' : 'NO'}</p>
-      </div>
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center mb-4">
+              <svg className="w-6 h-6 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Fixed Cost</h3>
+            </div>
+            <p className="text-gray-700 mb-6">Are you sure you want to delete this fixed cost? This action cannot be undone.</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={handleDeleteCancel}
+                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Removal Confirmation Dialog */}
+      {categoryConfirm.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center mb-4">
+              <svg className="w-6 h-6 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="text-lg font-semibold text-gray-900">Remove Category</h3>
+            </div>
+            <p className="text-gray-700 mb-6">Remove "{categoryConfirm.category}" from dropdown? Existing fixed costs using this category will still show it.</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={handleCategoryCancel}
+                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCategoryConfirm}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

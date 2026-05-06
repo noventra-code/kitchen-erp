@@ -44,3 +44,19 @@ coverage/
 
 # Misc
 .cache/
+
+# Hermes agent
+.hermes/
+
+# Test and debug scripts
+test-*.js
+debug-*.js
+count-*.js
+final-*.js
+find-*.js
+comprehensive-test.js
+remove-inline-routes.js
+*-test.js
+ocr-text.txt
+*.csv
+MYBIGIDEAS.TXT

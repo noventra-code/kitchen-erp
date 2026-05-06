@@ -182,4 +182,56 @@ router.post('/tenant-admins', async (req, res) => {
   }
 });
 
+// GET /api/master/users - list users with optional role filter
+router.get('/users', async (req, res) => {
+  try {
+    const { role } = req.query;
+    let query = 'SELECT id, email, first_name, last_name, role FROM users WHERE 1=1';
+    const params = [];
+    if (role) {
+      query += ' AND role = $1';
+      params.push(role);
+    }
+    query += ' ORDER BY created_at DESC';
+    const result = await mainPool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/master/tenants/:id/assign-admin - assign a user as tenant admin
+router.post('/tenants/:id/assign-admin', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user_id } = req.body;
+    
+    // Verify tenant exists
+    const tenantCheck = await mainPool.query('SELECT * FROM tenants WHERE id = $1', [id]);
+    if (tenantCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+    
+    // Verify user exists and is tenant_admin role
+    const userCheck = await mainPool.query('SELECT * FROM users WHERE id = $1 AND role = $2', [user_id, 'tenant_admin']);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found or not a tenant admin' });
+    }
+    
+    // Assign user to tenant (insert or update)
+    await mainPool.query(
+      `INSERT INTO tenant_users (user_id, tenant_id, role)
+       VALUES ($1, $2, 'tenant_admin')
+       ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'tenant_admin'`,
+      [user_id, id]
+    );
+    
+    res.json({ message: 'Admin assigned successfully' });
+  } catch (error) {
+    console.error('Error assigning admin:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
