@@ -12,9 +12,10 @@ import RecipeMappings from './pages/RecipeMappings';
 import FixedCosts from './pages/FixedCosts';
 import Reporting from './pages/Reporting';
 import Admin from './pages/Admin';
-import MasterAdmin from './pages/MasterAdmin';
+import SuperAdmin from './pages/SuperAdmin';
 import Profile from './pages/Profile';
 import CogProfile from './components/CogProfile';
+import TenantSelector from './components/TenantSelector';
 import ErrorBoundary from './components/ErrorBoundary';
 function App() {
   const location = useLocation();
@@ -125,9 +126,9 @@ function App() {
                         <>
                           {/* Tenant Admin button - visible to super_admin and tenant_admin */}
                           <button
-                            onClick={() => handleNavClick(user.role === 'super_admin' ? '/master-admin' : '/admin')}
+                            onClick={() => handleNavClick(user.role === 'super_admin' ? '/super-admin' : '/admin')}
                             className={`px-3 py-2 text-sm font-medium rounded-md ${
-                              location.pathname === '/admin' || location.pathname === '/master-admin'
+                              location.pathname === '/admin' || location.pathname === '/super-admin'
                                 ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
                                 : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
                             }`}
@@ -153,7 +154,10 @@ function App() {
                     </nav>
                   )}
                 </div>
-                <CogProfile currentTemplate={currentTemplate} />
+                <div className="flex items-center space-x-4">
+                  <TenantSelector />
+                  <CogProfile currentTemplate={currentTemplate} />
+                </div>
               </div>
             </div>
           </header>
@@ -175,7 +179,7 @@ function App() {
             <Route path="/fixed-costs" element={<FixedCosts />} />
             <Route path="/reporting" element={<Reporting />} />
             <Route path="/admin" element={<Admin />} />
-            <Route path="/master-admin" element={<MasterAdmin />} />
+            <Route path="/super-admin" element={<SuperAdmin />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/" element={<Login />} />
           </Routes>
