@@ -1,0 +1,59 @@
+# Kitchen ERP - Change Log
+
+## 2026-05-07 (Session)
+
+### Multi-Tenant Rebuild & Fixes
+
+**Commit 49b5cb1** - Fix: Resolve 'Tenant Context required' error
+- ROOT CAUSE: Backend fixed-costs routes used obsolete getTenantDb() helper that reads tenant_id from JWT (no longer exists)
+- FIX: Updated all fixed-costs routes to use tenantContext middleware (sets req.tenantDb)
+- FIX: Frontend Login.jsx now processes memberships array, auto-selects tenant if only one membership
+- FIX: TenantSelector.jsx rewritten - works for ALL users, not just admins
+- FIX: App.jsx role checks updated to use memberships array instead of deprecated user.role
+- DELETED: Obsolete getTenantDb() function from backend
+
+**Commit 7e8b93f** - Rename MasterAdmin.jsx to SuperAdmin.jsx
+- Fixed import error in App.jsx (expected SuperAdmin, found MasterAdmin)
+
+**Commit 20adc92** - Fix api.js: handle undefined options.headers
+- Changed spread to `...(options.headers || {})` to prevent runtime error
+
+**Commit 7cfc036** - Fix apiFetch is not defined error
+- Added missing `import apiFetch from '../api'` to 10 frontend components
+
+**Commit d23cae0** - Multi-tenant rebuild: Registry-based factory model
+- Replaced old tenant system with physical DB isolation (one DB per tenant)
+- New schema: users (global), tenants (registry), memberships (junction table)
+- JWT no longer contains tenant_id/role - uses X-Tenant-ID header
+- Login returns memberships array instead of single tenant_id
+
+---
+
+## Key Patterns to Remember
+
+1. NEVER access file system outside /root/.hermes/kitchen-erp without permission
+2. Middleware is Express.js style (req, res, next) - NOT Next.js
+3. Invoice table = price list reference ONLY (no status/pending/paid)
+4. PostgreSQL decimal fields need parseFloat() before JSON responses
+5. DO NOT wipe database unless user explicitly says "can" or gives direct permission
+6. Profile link in cog menu = visible to ALL logged-in users
+7. After finding root cause of bug, IMPLEMENT FIX IMMEDIATELY (don't ask, just do it)
+8. apiFetch is the standard fetch wrapper - import it in all pages that call API
+
+---
+
+## Database State
+
+- Main DB: kitchen_erp_main (registry)
+- Tenants: Demo Kitchen, Test New Tenant (x2)
+- Demo users: admin@example.com (SuperAdmin), superadmin@example.com (SuperAdmin), pizzasolutionsgroupllc@gmail.com (TenantAdmin)
+
+---
+
+## Working Commits (most recent first)
+
+49b5cb1 - Fix: Resolve 'Tenant Context required' error on fixed-costs page
+7e8b93f - Rename MasterAdmin.jsx to SuperAdmin.jsx to fix import error
+20adc92 - Fix api.js: handle undefined options.headers gracefully
+7cfc036 - Fix apiFetch is not defined error in multiple frontend components
+d23cae0 - Multi-tenant rebuild: Registry-based factory model with physical DB isolation
