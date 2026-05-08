@@ -21,7 +21,7 @@ function formatPhoneNumber(value) {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-function MasterAdmin() {
+function SuperAdmin() {
   const [tenants, setTenants] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -583,4 +583,4 @@ function MasterAdmin() {
   );
 }
 
-export default MasterAdmin;
+export default SuperAdmin;
