@@ -49,12 +49,24 @@
 
 1. NEVER access file system outside /root/.hermes/kitchen-erp without permission
 2. Middleware is Express.js style (req, res, next) - NOT Next.js
-3. Invoice table = price list reference ONLY (no status/pending/paid)
-4. PostgreSQL decimal fields need parseFloat() before JSON responses
-5. DO NOT wipe database unless user explicitly says "can" or gives direct permission
-6. Profile link in cog menu = visible to ALL logged-in users
-7. After finding root cause of bug, IMPLEMENT FIX IMMEDIATELY (don't ask, just do it)
-8. apiFetch is the standard fetch wrapper - import it in all pages that call API
+3. PostgreSQL decimal fields need parseFloat() before JSON responses
+4. DO NOT wipe database unless user explicitly says "can" or gives direct permission
+5. Profile link in cog menu = visible to ALL logged-in users
+6. After finding root cause of bug, IMPLEMENT FIX IMMEDIATELY (don't ask, just do it)
+7. apiFetch is the standard fetch wrapper - import it in all pages that call API
+8. CRITICAL USER RULE: Do NOT remove or delete any features without explicit user confirmation
+
+## Development Methodology (Adopted 2026-05-07)
+
+Using **superpowers methodology** (from obra/superpowers) as core mindset:
+
+1. **BRAINSTRMING** - Refine ideas through questions, explore alternatives BEFORE coding
+2. **WRITE PLANS** - Break work into bite-sized tasks (2-5 min each), exact file paths, verification steps
+3. **TDD ALWAYS** - RED-GREEN-REFACTOR cycle (write failing test, watch it fail, write minimal code)
+4. **SYSTEMATIC DEBUGGING** - 4-phase root cause (understand, find root cause, fix, verify)
+5. **EVIDENCE OVER CLAIMS** - Verify before declaring success
+6. **COMPLEXITY REDUCTION** - Simplicity as primary goal, YAGNI, DRY
+7. **SUBAGENT-DRIVEN DEVELOPMENT** - Dispatch subagents per task with two-stage review
 
 ---
 
