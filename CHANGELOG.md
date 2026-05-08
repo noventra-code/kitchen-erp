@@ -4,6 +4,16 @@
 
 ### Multi-Tenant Rebuild & Fixes
 
+**Commit 6f38bb2** - CogProfile: Display user role under name based on current tenant membership
+- Read memberships from localStorage to determine current role
+- Display role as colored badge under user name in COG dropdown
+- Show selected tenant name under user email for context
+- Fix role display to use currentRole (from memberships) instead of deprecated user.role
+- Update logout to clear new localStorage items (memberships, selectedTenantId)
+- Add support for Editor role badge (green)
+
+**Commit 6fe52e3** - Add CHANGELOG.md to track all changes and prevent regressions
+
 **Commit 49b5cb1** - Fix: Resolve 'Tenant Context required' error
 - ROOT CAUSE: Backend fixed-costs routes used obsolete getTenantDb() helper that reads tenant_id from JWT (no longer exists)
 - FIX: Updated all fixed-costs routes to use tenantContext middleware (sets req.tenantDb)
