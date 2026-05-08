@@ -7,7 +7,7 @@ export function apiFetch(url, options = {}) {
   const selectedTenantId = localStorage.getItem('selectedTenantId');
   
   const headers = {
-    ...options.headers,
+    ...(options.headers || {}),
   };
   
   if (token) {
