@@ -4,6 +4,12 @@
 
 ### Multi-Tenant Rebuild & Fixes
 
+**Commit 5a7083e** - CogProfile: Fetch role from database API instead of localStorage
+- Backend: Add GET /api/my-role endpoint (uses tenantContext, returns req.userRole)
+- CogProfile: Fetch role from /api/my-role when dropdown opens
+- Remove localStorage logic for role in CogProfile
+- Role now comes from database (memberships table) via API call
+
 **Commit 6f38bb2** - CogProfile: Display user role under name based on current tenant membership
 - Read memberships from localStorage to determine current role
 - Display role as colored badge under user name in COG dropdown
