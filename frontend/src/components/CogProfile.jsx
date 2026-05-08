@@ -4,12 +4,17 @@ import { useNavigate } from 'react-router-dom';
 function CogProfile({ currentTemplate }) {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState(null);
+  const [currentRole, setCurrentRole] = useState('');
+  const [selectedTenantName, setSelectedTenantName] = useState('');
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     // Load user from localStorage
     const userStr = localStorage.getItem('user');
+    const membershipsStr = localStorage.getItem('memberships');
+    const selectedTenantId = localStorage.getItem('selectedTenantId');
+    
     if (userStr) {
       try {
         setUser(JSON.parse(userStr));
@@ -18,6 +23,28 @@ function CogProfile({ currentTemplate }) {
       }
     }
 
+    // Compute current role from memberships
+    if (membershipsStr && selectedTenantId) {
+      try {
+        const memberships = JSON.parse(membershipsStr);
+        const membership = memberships.find(m => 
+          m.tenant_id.toString() === selectedTenantId.toString()
+        );
+        if (membership) {
+          setCurrentRole(membership.role);
+          setSelectedTenantName(membership.tenant_name || '');
+        } else {
+          // User has memberships but not for selected tenant (e.g., SuperAdmin)
+          const isSuperAdmin = memberships.some(m => m.role === 'SuperAdmin');
+          if (isSuperAdmin) {
+            setCurrentRole('SuperAdmin');
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse memberships');
+      }
+    }
+    
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
@@ -30,6 +57,9 @@ function CogProfile({ currentTemplate }) {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('memberships');
+    localStorage.removeItem('selectedTenantId');
+    localStorage.removeItem('selectedTenantName');
     setIsOpen(false);
     navigate('/login');
   };
@@ -70,15 +100,22 @@ function CogProfile({ currentTemplate }) {
           <div className="px-4 py-2 border-b border-gray-100">
             <p className="text-sm font-medium text-gray-900">{user.first_name} {user.last_name}</p>
             <p className="text-xs text-gray-500">{user.email}</p>
-            <span className={`inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded ${
-              user.role === 'super_admin' 
-                ? 'bg-purple-100 text-purple-800' 
-                : user.role === 'tenant_admin'
-                ? 'bg-blue-100 text-blue-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}>
-              {(user.role || '').replace('_', ' ')}
-            </span>
+            {selectedTenantName && (
+              <p className="text-xs text-gray-400 mt-1">{selectedTenantName}</p>
+            )}
+            {currentRole && (
+              <span className={`inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded ${
+                currentRole === 'SuperAdmin' 
+                  ? 'bg-purple-100 text-purple-800' 
+                  : currentRole === 'TenantAdmin'
+                  ? 'bg-blue-100 text-blue-800'
+                  : currentRole === 'Editor'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {currentRole}
+              </span>
+            )}
           </div>
 
           {/* Profile Link - visible to all users */}
@@ -94,8 +131,8 @@ function CogProfile({ currentTemplate }) {
             </button>
           )}
 
-          {/* User Profiles Link (super_admin only) */}
-          {user.role === 'super_admin' && (
+          {/* User Profiles Link (SuperAdmin only) */}
+          {currentRole === 'SuperAdmin' && (
             <button
               onClick={() => handleNavigation('/profiles')}
               className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
