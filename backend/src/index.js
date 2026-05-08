@@ -136,6 +136,16 @@ const tenantContext = async (req, res, next) => {
   }
 };
 
+// Get current user's role for the active tenant
+app.get('/api/my-role', tenantContext, async (req, res) => {
+  try {
+    res.json({ role: req.userRole });
+  } catch (error) {
+    console.error('Error fetching user role:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Email transporter setup
 const emailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',

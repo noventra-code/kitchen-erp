@@ -12,8 +12,7 @@ function CogProfile({ currentTemplate }) {
   useEffect(() => {
     // Load user from localStorage
     const userStr = localStorage.getItem('user');
-    const membershipsStr = localStorage.getItem('memberships');
-    const selectedTenantId = localStorage.getItem('selectedTenantId');
+    const selectedTenantName = localStorage.getItem('selectedTenantName');
     
     if (userStr) {
       try {
@@ -23,28 +22,10 @@ function CogProfile({ currentTemplate }) {
       }
     }
 
-    // Compute current role from memberships
-    if (membershipsStr && selectedTenantId) {
-      try {
-        const memberships = JSON.parse(membershipsStr);
-        const membership = memberships.find(m => 
-          m.tenant_id.toString() === selectedTenantId.toString()
-        );
-        if (membership) {
-          setCurrentRole(membership.role);
-          setSelectedTenantName(membership.tenant_name || '');
-        } else {
-          // User has memberships but not for selected tenant (e.g., SuperAdmin)
-          const isSuperAdmin = memberships.some(m => m.role === 'SuperAdmin');
-          if (isSuperAdmin) {
-            setCurrentRole('SuperAdmin');
-          }
-        }
-      } catch (e) {
-        console.error('Failed to parse memberships');
-      }
+    if (selectedTenantName) {
+      setSelectedTenantName(selectedTenantName);
     }
-    
+
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
@@ -53,6 +34,39 @@ function CogProfile({ currentTemplate }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Fetch current role from database when dropdown opens
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchCurrentRole();
+    }
+  }, [isOpen, user]);
+
+  const fetchCurrentRole = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const selectedTenantId = localStorage.getItem('selectedTenantId');
+      
+      if (!selectedTenantId) {
+        setCurrentRole('');
+        return;
+      }
+
+      const response = await fetch('http://localhost:3000/api/my-role', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': selectedTenantId
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentRole(data.role || '');
+      }
+    } catch (err) {
+      console.error('Error fetching user role:', err);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -143,8 +157,6 @@ function CogProfile({ currentTemplate }) {
               User Profiles
             </button>
           )}
-
-
 
           {/* Logout */}
           <div className="border-t border-gray-100">
