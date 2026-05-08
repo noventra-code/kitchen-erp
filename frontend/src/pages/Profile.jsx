@@ -48,7 +48,7 @@ function Profile() {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/api/auth/change-password', {
+      const response = await apiFetch('http://localhost:3000/api/auth/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

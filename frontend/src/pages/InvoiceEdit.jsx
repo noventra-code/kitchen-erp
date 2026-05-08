@@ -17,7 +17,7 @@ const InvoiceEdit = () => {
   const fetchInvoice = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/api/invoices/${id}`, {
+      const response = await apiFetch(`http://localhost:3000/api/invoices/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -37,7 +37,7 @@ const InvoiceEdit = () => {
   const handleSave = async (formData) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/api/invoices/${id}`, {
+      const response = await apiFetch(`http://localhost:3000/api/invoices/${id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

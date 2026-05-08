@@ -1,27 +1,11 @@
 -- Main Database Initialization
--- Registry for multi-tenant system with physical DB isolation
--- Wiped existing permission/tenant middleware and replaced with registry-based model
+-- This database stores tenant metadata, users, and master recipes
 
--- Drop existing tables to be replaced (preserve master_recipes, password_reset_tokens)
-DROP TABLE IF EXISTS tenant_users CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS tenants CASCADE;
-
--- Create users table (Global identity, no tenant association)
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    first_name VARCHAR(100),
-    last_name VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Create tenants table (Registry of all tenants with DB connection info)
+-- Create tenants table
 CREATE TABLE IF NOT EXISTS tenants (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    db_name VARCHAR(255) NOT NULL UNIQUE, -- Unique PostgreSQL DB name for this tenant
+    db_name VARCHAR(255) NOT NULL UNIQUE,
     contact_first_name VARCHAR(100),
     contact_last_name VARCHAR(100),
     address_street VARCHAR(255),
@@ -34,16 +18,28 @@ CREATE TABLE IF NOT EXISTS tenants (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create memberships table (Many-to-Many bridge: user ↔ tenant + role)
-CREATE TABLE IF NOT EXISTS memberships (
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+-- Create users table
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
     tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('SuperAdmin', 'TenantAdmin', 'Editor', 'Viewer')),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, tenant_id)
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL CHECK (role IN ('super_admin', 'tenant_admin', 'staff')),
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Preserve existing master_recipes table (not part of permission/tenant middleware)
+-- Create tenant_users junction table (many-to-many user-tenant relationships)
+CREATE TABLE IF NOT EXISTS tenant_users (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL DEFAULT 'tenant_admin' CHECK (role IN ('tenant_admin', 'staff')),
+    UNIQUE(user_id, tenant_id)
+);
+
+-- Create master_recipes table (global recipe library)
 CREATE TABLE IF NOT EXISTS master_recipes (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -60,7 +56,7 @@ CREATE TABLE IF NOT EXISTS master_recipes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Preserve password_reset_tokens table (not part of permission/tenant middleware)
+-- Create password_reset_tokens table for forgot password functionality
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
@@ -70,18 +66,16 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create indexes for faster lookups
+-- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_email ON password_reset_tokens(email);
-CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships(user_id);
-CREATE INDEX IF NOT EXISTS idx_memberships_tenant ON memberships(tenant_id);
 
--- Insert sample tenant (Demo Kitchen)
-INSERT INTO tenants (name, db_name) VALUES
+-- Insert sample master recipes
+INSERT INTO tenants (name, db_name) VALUES 
 ('Demo Kitchen', 'tenant_demo_kitchen')
 ON CONFLICT (db_name) DO NOTHING;
 
--- Insert sample master recipe (preserved from old init.sql)
+-- Sample master recipe
 INSERT INTO master_recipes (name, description, prep_time, cook_time, servings, ingredients_json, instructions) 
 VALUES (
     'Classic Margherita Pizza',

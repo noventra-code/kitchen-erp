@@ -50,7 +50,7 @@ function FixedCosts() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('http://localhost:3000/api/fixed-costs', {
+      const res = await apiFetch('http://localhost:3000/api/fixed-costs', {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -114,7 +114,7 @@ function FixedCosts() {
         value: parseFloat(formData.value)
       };
       
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -157,7 +157,7 @@ function FixedCosts() {
   const handleDeleteConfirm = async () => {
     const { itemId } = deleteConfirm;
     try {
-      const res = await fetch(`http://localhost:3000/api/fixed-costs/${itemId}`, {
+      const res = await apiFetch(`http://localhost:3000/api/fixed-costs/${itemId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

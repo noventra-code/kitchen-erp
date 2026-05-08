@@ -1,3 +1,4 @@
+import apiFetch from "../api";
 import { useState, useEffect, useRef } from 'react';
 
 const PORTION_UNITS = ['tsp', 'tbsp', 'cup', 'pint', 'quart', 'gallon', 'oz', 'lb', 'each'];
@@ -14,7 +15,6 @@ function ManualRecipeEntry({ recipe, onSave, onClose }) {
   const [notification, setNotification] = useState(null);
   const [modal, setModal] = useState({ show: false, type: 'error', message: '', onConfirm: null });
 
-  const token = localStorage.getItem('token');
 
   // Auto-dismiss notification after 3 seconds
   useEffect(() => {
@@ -112,7 +112,7 @@ function ManualRecipeEntry({ recipe, onSave, onClose }) {
       const url = recipe ? `http://localhost:3000/api/recipes/${recipe.id}` : 'http://localhost:3000/api/recipes';
       const method = recipe ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: method,
         headers: {
           'Content-Type': 'application/json',

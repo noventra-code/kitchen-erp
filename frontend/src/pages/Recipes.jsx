@@ -50,7 +50,7 @@ function Recipes() {
       }
 
       // Fetch recipes
-      const recipesRes = await fetch(url, {
+      const recipesRes = await apiFetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -66,7 +66,7 @@ function Recipes() {
       }
 
       // Fetch categories
-      const catRes = await fetch('http://localhost:3000/api/recipe-categories', {
+      const catRes = await apiFetch('http://localhost:3000/api/recipe-categories', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -162,7 +162,7 @@ function Recipes() {
         instructions: validInstructions.map(({ step }) => String(step))
       };
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -241,7 +241,7 @@ function Recipes() {
   const handleDelete = (id) => {
     showConfirm('Are you sure you want to delete this recipe?', async () => {
       try {
-        const res = await fetch(`http://localhost:3000/api/recipes/${id}`, {
+        const res = await apiFetch(`http://localhost:3000/api/recipes/${id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });

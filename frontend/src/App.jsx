@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, useLocation, Link, useNavigate } from 'react-router-dom';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Recipes from './pages/Recipes';
 import RecipeCsvImport from './pages/RecipeCsvImport';
@@ -14,9 +16,11 @@ import Reporting from './pages/Reporting';
 import Admin from './pages/Admin';
 import SuperAdmin from './pages/SuperAdmin';
 import Profile from './pages/Profile';
+import Profiles from './pages/Profiles';
 import CogProfile from './components/CogProfile';
 import TenantSelector from './components/TenantSelector';
 import ErrorBoundary from './components/ErrorBoundary';
+
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -29,6 +33,15 @@ function App() {
   // Track current template
   const [currentTemplate, setCurrentTemplate] = useState(() => {
     return localStorage.getItem('selectedTemplate') || 'modern';
+  });
+
+  // Tenant switching state (for super_admin)
+  const [tenants, setTenants] = useState([]);
+  const [selectedTenantId, setSelectedTenantId] = useState(() => {
+    return localStorage.getItem('selectedTenantId') || '';
+  });
+  const [selectedTenantName, setSelectedTenantName] = useState(() => {
+    return localStorage.getItem('selectedTenantName') || '';
   });
 
   // Apply saved template on load
@@ -52,8 +65,60 @@ function App() {
     return () => window.removeEventListener('templateChanged', handleTemplateChange);
   }, []);
 
+  // Fetch tenants for super_admin
+  useEffect(() => {
+    if (user && user.role === 'super_admin') {
+      fetchTenants();
+    }
+  }, [user]);
+
+  const fetchTenants = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3000/api/master/tenants', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTenants(data);
+      }
+    } catch (err) {
+      console.error('Error fetching tenants:', err);
+    }
+  };
+
+  const handleTenantChange = (e) => {
+    const newTenantId = e.target.value;
+    const newTenantName = e.target.options[e.target.selectedIndex].text;
+    
+    setSelectedTenantId(newTenantId);
+    setSelectedTenantName(newTenantId ? newTenantName : '');
+    
+    localStorage.setItem('selectedTenantId', newTenantId);
+    localStorage.setItem('selectedTenantName', newTenantId ? newTenantName : '');
+    
+    // Update user object in localStorage to reflect the tenant change
+    if (user) {
+      const updatedUser = { ...user, tenant_id: newTenantId ? parseInt(newTenantId) : null };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+    
+    // Reload the page to refresh all data with new tenant context
+    window.location.reload();
+  };
+
   const handleNavClick = (path) => {
     navigate(path);
+  };
+
+  // Get the display name for the header
+  const getHeaderTitle = () => {
+    if (user && user.role === 'super_admin' && selectedTenantName && selectedTenantId) {
+      return `Kitchen ERP - ${selectedTenantName}`;
+    }
+    return 'Kitchen ERP';
   };
 
   return (
@@ -66,8 +131,30 @@ function App() {
               <div className="flex justify-between items-center h-16">
                 <div className="flex items-center space-x-8">
                   <Link to="/dashboard" className={`text-xl font-bold ${currentTemplate === 'red-grey' ? 'text-white' : 'text-gray-900'}`}>
-                    Kitchen ERP
+                    {getHeaderTitle()}
                   </Link>
+                  
+                  {/* Tenant Selector for Super Admin */}
+                  {user && user.role === 'super_admin' && (
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={selectedTenantId}
+                        onChange={handleTenantChange}
+                        className={`text-sm rounded-md border ${
+                          currentTemplate === 'red-grey' 
+                            ? 'bg-red-700 text-white border-red-600' 
+                            : 'bg-white text-gray-900 border-gray-300'
+                        } px-3 py-1`}
+                      >
+                        <option value="">SUPER ADMIN (No Tenant)</option>
+                        {tenants.map(tenant => (
+                          <option key={tenant.id} value={tenant.id}>
+                            {tenant.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   
                   {/* Top Menu */}
                   {user && (
@@ -169,6 +256,8 @@ function App() {
         <ErrorBoundary>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/recipes" element={<Recipes />} />
             <Route path="/recipe-csv-import" element={<RecipeCsvImport />} />
@@ -181,6 +270,7 @@ function App() {
             <Route path="/admin" element={<Admin />} />
             <Route path="/super-admin" element={<SuperAdmin />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/profiles" element={<Profiles />} />
             <Route path="/" element={<Login />} />
           </Routes>
         </ErrorBoundary>

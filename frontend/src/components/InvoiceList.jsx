@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useNotification, RibbonNotification } from '../components/NotificationSystem';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AddInvoiceModal from '../components/AddInvoiceModal';
+import apiFetch from '../api';
 
 const InvoiceList = () => {
   const [invoices, setInvoices] = useState([]);
@@ -18,11 +19,8 @@ const InvoiceList = () => {
 
   const fetchInvoices = async () => {
     try {
-      const token = localStorage.getItem('token');
       const queryParams = new URLSearchParams(filters).toString();
-      const response = await fetch(`http://localhost:3000/api/invoices?${queryParams}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await apiFetch(`http://localhost:3000/api/invoices?${queryParams}`);
       const data = await response.json();
       setInvoices(data);
       setLoading(false);
@@ -36,11 +34,8 @@ const InvoiceList = () => {
     const newFilters = { ...filters, [e.target.name]: e.target.value };
     setFilters(newFilters);
     // Auto-filter: fetch invoices whenever the filter changes
-    const token = localStorage.getItem('token');
     const queryParams = new URLSearchParams(newFilters).toString();
-    fetch(`http://localhost:3000/api/invoices?${queryParams}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    apiFetch(`http://localhost:3000/api/invoices?${queryParams}`)
       .then(res => res.json())
       .then(data => setInvoices(data))
       .catch(err => console.error('Error fetching invoices:', err));
@@ -52,12 +47,10 @@ const InvoiceList = () => {
 
   const confirmDelete = async () => {
     if (!deleteInvoiceId) return;
-    
+
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:3000/api/invoices/${deleteInvoiceId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await apiFetch(`http://localhost:3000/api/invoices/${deleteInvoiceId}`, {
+        method: 'DELETE'
       });
       if (res.ok) {
         setNotification({ type: 'success', message: 'Invoice deleted successfully!' });

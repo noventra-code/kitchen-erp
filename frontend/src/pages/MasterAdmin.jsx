@@ -75,7 +75,7 @@ function MasterAdmin() {
 
   const fetchTenants = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/master/tenants', {
+      const res = await apiFetch('http://localhost:3000/api/master/tenants', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -89,7 +89,7 @@ function MasterAdmin() {
 
   const fetchAdmins = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/master/tenant-admins', {
+      const res = await apiFetch('http://localhost:3000/api/master/tenant-admins', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -101,7 +101,7 @@ function MasterAdmin() {
 
   const fetchAvailableUsers = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/master/users?role=tenant_admin', {
+      const res = await apiFetch('http://localhost:3000/api/master/users?role=tenant_admin', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -113,7 +113,7 @@ function MasterAdmin() {
 
   const fetchTenantAdmin = async (tenantId) => {
     try {
-      const res = await fetch('http://localhost:3000/api/master/tenant-admins', {
+      const res = await apiFetch('http://localhost:3000/api/master/tenant-admins', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -128,7 +128,7 @@ function MasterAdmin() {
   const assignTenantAdmin = async (userId) => {
     if (!editingTenant) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/master/tenants/${editingTenant.id}/assign-admin`, {
+      const res = await apiFetch(`http://localhost:3000/api/master/tenants/${editingTenant.id}/assign-admin`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -157,7 +157,7 @@ function MasterAdmin() {
         : 'http://localhost:3000/api/master/tenants';
       const method = editingTenant ? 'PUT' : 'POST';
       
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -230,7 +230,7 @@ function MasterAdmin() {
 
   const handleDeleteTenant = async (id) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/master/tenants/${id}`, {
+      const res = await apiFetch(`http://localhost:3000/api/master/tenants/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -254,7 +254,7 @@ function MasterAdmin() {
       return;
     }
     try {
-      const res = await fetch('http://localhost:3000/api/master/tenant-admins', {
+      const res = await apiFetch('http://localhost:3000/api/master/tenant-admins', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

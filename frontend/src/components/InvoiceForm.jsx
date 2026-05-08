@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ProcessingModal from './ProcessingModal';
+import apiFetch from '../api';
 
 const InvoiceForm = ({ initialData = {}, onSubmit, submitText = 'Create Invoice', mode = 'manual' }) => {
   // Format invoice_date to YYYY-MM-DD for the date input
@@ -264,8 +265,7 @@ const InvoiceForm = ({ initialData = {}, onSubmit, submitText = 'Create Invoice'
       setProcessingProgress(20);
       setProcessingStage('uploading');
 
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/api/ocr/process', {
+      const response = await apiFetch('http://localhost:3000/api/ocr/process', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formDataObj

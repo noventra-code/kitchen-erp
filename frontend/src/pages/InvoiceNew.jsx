@@ -25,7 +25,7 @@ const InvoiceNew = () => {
   const handleSubmit = async (formData) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/api/invoices', {
+      const response = await apiFetch('http://localhost:3000/api/invoices', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

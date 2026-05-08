@@ -7,6 +7,7 @@ const helmet = require('helmet');
 const multer = require('multer');
 const Tesseract = require('tesseract.js');
 const { PDFParse } = require('pdf-parse');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 const masterAdminRoutes = require('./master-admin');
 
@@ -36,8 +37,11 @@ const mainPool = new Pool({
 // Tenant Connection Cache
 const tenantPools = new Map();
 
-// Tenant Middleware - identifies tenant and creates/retrieves connection
-const tenantMiddleware = async (req, res, next) => {
+// Make mainPool accessible to routes
+app.set('mainPool', mainPool);
+
+// Tenant Context Middleware - Registry-based factory model
+const tenantContext = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
@@ -45,54 +49,67 @@ const tenantMiddleware = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
-    req.user = decoded;
+    const userId = decoded.id;
 
-    // Get tenant database name from main DB
-    console.log('Tenant middleware: decoded.tenant_id =', decoded.tenant_id);
-    
-    let tenantId = decoded.tenant_id;
-    
-    // For super_admin with no tenant_id, allow specifying tenant via header or query param
-    if (!tenantId && decoded.role === 'super_admin') {
-      const headerTenantId = req.headers['x-tenant-id'] || req.query.tenant_id;
-      if (headerTenantId) {
-        // If it's a number, use it directly; otherwise look up by db_name
-        if (/^\d+$/.test(headerTenantId)) {
-          tenantId = parseInt(headerTenantId);
-        } else {
-          // Look up tenant by db_name
-          const tenantByDbName = await mainPool.query(
-            'SELECT id FROM tenants WHERE db_name = $1',
-            [headerTenantId]
-          );
-          if (tenantByDbName.rows.length > 0) {
-            tenantId = tenantByDbName.rows[0].id;
-          }
-        }
+    // Get tenant ID from X-Tenant-ID header (required for all tenant-scoped requests)
+    const headerTenantId = req.headers['x-tenant-id'];
+    if (!headerTenantId) {
+      return res.status(400).json({ error: 'X-Tenant-ID header is required' });
+    }
+
+    // Resolve tenant ID (could be numeric ID or db_name)
+    let tenantId;
+    let dbName;
+    if (/^\d+$/.test(headerTenantId)) {
+      tenantId = parseInt(headerTenantId);
+      // Get db_name from tenants table
+      const tenantResult = await mainPool.query(
+        'SELECT id, db_name FROM tenants WHERE id = $1',
+        [tenantId]
+      );
+      if (tenantResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
       }
+      dbName = tenantResult.rows[0].db_name;
+    } else {
+      // Treat as db_name
+      dbName = headerTenantId;
+      const tenantResult = await mainPool.query(
+        'SELECT id, db_name FROM tenants WHERE db_name = $1',
+        [dbName]
+      );
+      if (tenantResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      tenantId = tenantResult.rows[0].id;
     }
-    
-    if (!tenantId) {
-      return res.status(400).json({ error: 'No tenant specified. Super admins must provide X-Tenant-ID header or tenant_id query parameter.' });
-    }
-    
-    const tenantResult = await mainPool.query(
-      'SELECT db_name FROM tenants WHERE id = $1',
-      [tenantId]
+
+    // Verify user has membership in this tenant OR is a SuperAdmin with global access
+    let membership = await mainPool.query(
+      'SELECT role FROM memberships WHERE user_id = $1 AND tenant_id = $2',
+      [userId, tenantId]
     );
 
-    console.log('Tenant middleware: tenantResult.rows =', tenantResult.rows);
-
-    if (tenantResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Tenant not found' });
+    // If no direct membership, check if user is a SuperAdmin (any SuperAdmin membership)
+    if (membership.rows.length === 0) {
+      const superAdminCheck = await mainPool.query(
+        'SELECT 1 FROM memberships WHERE user_id = $1 AND role = $2 LIMIT 1',
+        [userId, 'SuperAdmin']
+      );
+      if (superAdminCheck.rows.length > 0) {
+        // SuperAdmin accessing any tenant: assign TenantAdmin role for this session
+        membership = { rows: [{ role: 'SuperAdmin' }] };
+      }
     }
 
-    const dbName = tenantResult.rows[0].db_name;
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ error: 'No membership found for this tenant' });
+    }
 
-    // Check if we have a pool for this tenant
+    // Get or create tenant connection pool
     if (!tenantPools.has(dbName)) {
       const tenantPool = new Pool({
-        host: process.env.MAIN_DB_HOST || 'localhost',
+        host: process.env.MAIN_DB_HOST || 'kitchen-erp-main-db',
         port: process.env.MAIN_DB_PORT || 5432,
         database: dbName,
         user: process.env.MAIN_DB_USER || 'erp_admin',
@@ -104,12 +121,67 @@ const tenantMiddleware = async (req, res, next) => {
       tenantPools.set(dbName, tenantPool);
     }
 
+    // Attach to request
     req.tenantDb = tenantPools.get(dbName);
+    req.userRole = membership.rows[0].role;
+    req.tenantId = tenantId;
+    req.dbName = dbName;
     next();
   } catch (error) {
-    console.error('Tenant middleware error:', error);
-    return res.status(401).json({ error: 'Invalid token or tenant lookup failed' });
+    console.error('Tenant context error:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    return res.status(500).json({ error: 'Failed to set tenant context' });
   }
+};
+
+// Email transporter setup
+const emailTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+// Helper function to send password reset email
+const sendPasswordResetEmail = async (email, resetToken) => {
+  const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'Kitchen ERP <noreply@kitchenerp.com>',
+    to: email,
+    subject: 'Password Reset Request - Kitchen ERP',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Reset Request</h2>
+        <p>You requested a password reset for your Kitchen ERP account.</p>
+        <p>Click the button below to reset your password (valid for 1 hour):</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" style="background-color: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+        </div>
+        <p>Or copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+        <p><strong>If you didn't request this, please ignore this email.</strong></p>
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+        <p style="color: #999; font-size: 12px;">Kitchen ERP - Multi-tenant Kitchen Management System</p>
+      </div>
+    `,
+  };
+
+  // For development/testing - log the reset URL if email not configured
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.log('='.repeat(60));
+    console.log('EMAIL NOT CONFIGURED - Password reset link:');
+    console.log(resetUrl);
+    console.log('='.repeat(60));
+    return { development: true, resetUrl };
+  }
+
+  return await emailTransporter.sendMail(mailOptions);
 };
 
 // Auth Routes
@@ -143,8 +215,17 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Get user's memberships (tenants + roles)
+    const memberships = await mainPool.query(
+      `SELECT m.tenant_id, m.role, t.name as tenant_name, t.db_name 
+       FROM memberships m 
+       JOIN tenants t ON m.tenant_id = t.id 
+       WHERE m.user_id = $1`,
+      [user.id]
+    );
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, tenant_id: user.tenant_id, role: user.role },
+      { id: user.id, email: user.email },
       process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
       { expiresIn: '24h' }
     );
@@ -154,10 +235,9 @@ app.post('/api/auth/login', async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        role: user.role,
-        tenant_id: user.tenant_id,
         first_name: user.first_name,
         last_name: user.last_name,
+        memberships: memberships.rows, // List of tenants + roles
       },
     });
   } catch (error) {
@@ -225,6 +305,105 @@ app.post('/api/auth/change-password', async (req, res) => {
   }
 });
 
+// Forgot Password Route
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Check if user exists
+    const userResult = await mainPool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+
+    // Always return success to prevent email enumeration
+    if (userResult.rows.length === 0) {
+      return res.json({ message: 'If that email exists, a password reset link has been sent.' });
+    }
+
+    // Generate reset token
+    const resetToken = require('crypto').randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // Token valid for 1 hour
+
+    // Invalidate any existing unused tokens for this email
+    await mainPool.query(
+      'UPDATE password_reset_tokens SET used = TRUE WHERE email = $1 AND used = FALSE',
+      [email]
+    );
+
+    // Store new reset token
+    await mainPool.query(
+      'INSERT INTO password_reset_tokens (email, token, expires_at) VALUES ($1, $2, $3)',
+      [email, resetToken, expiresAt]
+    );
+
+    // Send reset email
+    await sendPasswordResetEmail(email, resetToken);
+
+    res.json({ message: 'If that email exists, a password reset link has been sent.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Reset Password Route
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, new_password, confirm_password } = req.body;
+
+    if (!token || !new_password || !confirm_password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    if (new_password !== confirm_password) {
+      return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Find valid token
+    const tokenResult = await mainPool.query(
+      'SELECT * FROM password_reset_tokens WHERE token = $1 AND used = FALSE AND expires_at > CURRENT_TIMESTAMP',
+      [token]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const resetRecord = tokenResult.rows[0];
+    const email = resetRecord.email;
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+
+    // Update user password
+    await mainPool.query(
+      'UPDATE users SET password_hash = $1 WHERE email = $2',
+      [hashedPassword, email]
+    );
+
+    // Mark token as used
+    await mainPool.query(
+      'UPDATE password_reset_tokens SET used = TRUE WHERE id = $1',
+      [resetRecord.id]
+    );
+
+    res.json({ message: 'Password reset successfully. You can now log in with your new password.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Master Recipes Routes (from main DB)
 app.get('/api/master-recipes', async (req, res) => {
   try {
@@ -239,7 +418,7 @@ app.get('/api/master-recipes', async (req, res) => {
 });
 
 // Clone master recipe to tenant DB
-app.post('/api/recipes/clone/:masterRecipeId', tenantMiddleware, async (req, res) => {
+app.post('/api/recipes/clone/:masterRecipeId', tenantContext, async (req, res) => {
   try {
     const { masterRecipeId } = req.params;
 
@@ -281,7 +460,7 @@ app.post('/api/recipes/clone/:masterRecipeId', tenantMiddleware, async (req, res
 });
 
 // Tenant-specific recipe routes
-app.get('/api/recipes', tenantMiddleware, async (req, res) => {
+app.get('/api/recipes', tenantContext, async (req, res) => {
   try {
     const { category } = req.query;
     let query = 'SELECT * FROM local_recipes';
@@ -303,7 +482,7 @@ app.get('/api/recipes', tenantMiddleware, async (req, res) => {
 });
 
 // Get recipe count for dashboard
-app.get('/api/recipes/count', tenantMiddleware, async (req, res) => {
+app.get('/api/recipes/count', tenantContext, async (req, res) => {
   try {
     const result = await req.tenantDb.query('SELECT COUNT(*) FROM local_recipes');
     res.json({ count: parseInt(result.rows[0].count) });
@@ -314,7 +493,7 @@ app.get('/api/recipes/count', tenantMiddleware, async (req, res) => {
 });
 
 // Get distinct recipe categories
-app.get('/api/recipe-categories', tenantMiddleware, async (req, res) => {
+app.get('/api/recipe-categories', tenantContext, async (req, res) => {
   try {
     const result = await req.tenantDb.query(
       'SELECT DISTINCT category FROM local_recipes WHERE category IS NOT NULL ORDER BY category ASC'
@@ -326,7 +505,7 @@ app.get('/api/recipe-categories', tenantMiddleware, async (req, res) => {
   }
 });
 
-app.post('/api/recipes', tenantMiddleware, async (req, res) => {
+app.post('/api/recipes', tenantContext, async (req, res) => {
   try {
     const { name, description, prep_time, cook_time, servings, ingredients_json, instructions, category } = req.body;
     
@@ -347,7 +526,7 @@ app.post('/api/recipes', tenantMiddleware, async (req, res) => {
   }
 });
 
-app.put('/api/recipes/:id', tenantMiddleware, async (req, res) => {
+app.put('/api/recipes/:id', tenantContext, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, prep_time, cook_time, servings, ingredients_json, instructions, category } = req.body;
@@ -373,7 +552,7 @@ app.put('/api/recipes/:id', tenantMiddleware, async (req, res) => {
   }
 });
 
-app.delete('/api/recipes/:id', tenantMiddleware, async (req, res) => {
+app.delete('/api/recipes/:id', tenantContext, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await req.tenantDb.query(
@@ -390,52 +569,14 @@ app.delete('/api/recipes/:id', tenantMiddleware, async (req, res) => {
   }
 });
 
-// Dashboard stats
-app.get('/api/dashboard/stats', async (req, res) => {
+// Dashboard stats - uses tenantContext to handle tenant context (including super_admin with X-Tenant-ID header)
+app.get('/api/dashboard/stats', tenantContext, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
-
-    // Handle super_admin (no tenant)
-    if (!decoded.tenant_id) {
-      return res.status(400).json({ error: 'Dashboard requires a tenant context. Super admins should select a tenant.' });
-    }
-
-    // Get tenant database name
-    const tenantResult = await mainPool.query(
-      'SELECT db_name FROM tenants WHERE id = $1',
-      [decoded.tenant_id]
-    );
-
-    if (tenantResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Tenant not found' });
-    }
-
-    const dbName = tenantResult.rows[0].db_name;
-
-    // Get or create tenant pool
-    if (!tenantPools.has(dbName)) {
-      const tenantPool = new Pool({
-        host: process.env.MAIN_DB_HOST || 'localhost',
-        port: process.env.MAIN_DB_PORT || 5432,
-        database: dbName,
-        user: process.env.MAIN_DB_USER || 'erp_admin',
-        password: process.env.MAIN_DB_PASSWORD || 'erp_secure_password_123',
-      });
-      tenantPools.set(dbName, tenantPool);
-    }
-
-    const tenantDb = tenantPools.get(dbName);
-
     // Get recipe count
-    const recipeResult = await tenantDb.query('SELECT COUNT(*) FROM local_recipes');
+    const recipeResult = await req.tenantDb.query('SELECT COUNT(*) FROM local_recipes');
 
     // Get total invoice count (using invoices for item pricing)
-    const invoiceResult = await tenantDb.query('SELECT COUNT(*) FROM invoices');
+    const invoiceResult = await req.tenantDb.query('SELECT COUNT(*) FROM invoices');
 
     res.json({
       recipeCount: parseInt(recipeResult.rows[0].count),
@@ -584,10 +725,14 @@ app.get('/api/health', (req, res) => {
 
 // Invoices routes loaded from ./routes/invoices
 const invoiceRoutes = require('./routes/invoices');
-app.use('/api/invoices', tenantMiddleware, invoiceRoutes);
+app.use('/api/invoices', tenantContext, invoiceRoutes);
 
 const recipeMappingRoutes = require('./routes/recipe-mappings');
 app.use('/api/recipe-mappings', recipeMappingRoutes);
+
+// Users routes (super_admin only, uses main DB)
+const userRoutes = require('./routes/users');
+app.use('/api/users', userRoutes);
 
 // OCR endpoint - process invoice images
 const upload = multer({ dest: '/tmp/' });

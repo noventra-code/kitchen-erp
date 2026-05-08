@@ -33,7 +33,7 @@ function Reporting() {
   const fetchTenants = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/api/master/tenants', {
+      const response = await apiFetch('http://localhost:3000/api/master/tenants', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -63,7 +63,7 @@ function Reporting() {
         url += `?tenant_id=${tenantId}`;
       }
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

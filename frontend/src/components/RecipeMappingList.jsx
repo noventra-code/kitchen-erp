@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import apiFetch from '../api';
 
 const RecipeMappingList = () => {
   const [mappings, setMappings] = useState([]);
@@ -32,7 +33,7 @@ const RecipeMappingList = () => {
   const fetchMappings = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/api/recipe-mappings', {
+      const response = await apiFetch('http://localhost:3000/api/recipe-mappings', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -45,7 +46,7 @@ const RecipeMappingList = () => {
   const fetchRecipes = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/api/recipes', {
+      const response = await apiFetch('http://localhost:3000/api/recipes', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -61,7 +62,7 @@ const RecipeMappingList = () => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/api/recipe-mappings', {
+      const response = await apiFetch('http://localhost:3000/api/recipe-mappings', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -102,10 +103,8 @@ const RecipeMappingList = () => {
       message: 'Are you sure you want to delete this mapping?',
       onConfirm: async () => {
         try {
-          const token = localStorage.getItem('token');
-          await fetch(`http://localhost:3000/api/recipe-mappings/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
+          await apiFetch(`http://localhost:3000/api/recipe-mappings/${id}`, {
+            method: 'DELETE'
           });
           setModal({ show: false, type: 'error', message: '', onConfirm: null });
           fetchMappings();

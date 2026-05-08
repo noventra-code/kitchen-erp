@@ -37,7 +37,7 @@ function Admin() {
       setError(null);
 
       // Fetch labor rates
-      const ratesRes = await fetch('http://localhost:3000/api/labor-rates', {
+      const ratesRes = await apiFetch('http://localhost:3000/api/labor-rates', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -53,7 +53,7 @@ function Admin() {
       }
 
       // Fetch tenant settings
-      const settingsRes = await fetch('http://localhost:3000/api/tenant-settings', {
+      const settingsRes = await apiFetch('http://localhost:3000/api/tenant-settings', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -110,7 +110,7 @@ function Admin() {
       
       const method = editingId ? 'PUT' : 'POST';
       
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -150,7 +150,7 @@ function Admin() {
   const handleDelete = (id) => {
     showConfirm('Are you sure you want to delete this labor rate?', async () => {
       try {
-        const res = await fetch(`http://localhost:3000/api/labor-rates/${id}`, {
+        const res = await apiFetch(`http://localhost:3000/api/labor-rates/${id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -184,7 +184,7 @@ function Admin() {
     setSaveError(null);
 
     try {
-      const res = await fetch('http://localhost:3000/api/tenant-settings', {
+      const res = await apiFetch('http://localhost:3000/api/tenant-settings', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

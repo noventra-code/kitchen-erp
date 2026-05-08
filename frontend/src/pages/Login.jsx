@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
 function Login() {
@@ -112,6 +112,12 @@ function Login() {
           
           <div className="text-center text-xs text-gray-500">
             <p>Demo: admin@example.com / password</p>
+          </div>
+
+          <div className="text-center">
+            <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500">
+              Forgot your password?
+            </Link>
           </div>
         </form>
       </div>

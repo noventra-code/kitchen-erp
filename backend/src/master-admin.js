@@ -2,9 +2,11 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 
 const mainPool = new Pool({
-  host: process.env.MAIN_DB_HOST || 'localhost',
+  host: process.env.MAIN_DB_HOST || 'kitchen-erp-main-db',
   port: process.env.MAIN_DB_PORT || 5432,
   database: process.env.MAIN_DB_NAME || 'kitchen_erp_main',
   user: process.env.MAIN_DB_USER || 'erp_admin',
@@ -15,7 +17,7 @@ const mainPool = new Pool({
 async function createTenantDatabase(dbName) {
   const { Client } = require('pg');
   const client = new Client({
-    host: process.env.MAIN_DB_HOST || 'localhost',
+    host: process.env.MAIN_DB_HOST || 'kitchen-erp-main-db',
     port: process.env.MAIN_DB_PORT || 5432,
     user: process.env.MAIN_DB_USER || 'erp_admin',
     password: process.env.MAIN_DB_PASSWORD || 'erp_secure_password_123',
@@ -27,6 +29,27 @@ async function createTenantDatabase(dbName) {
     if (check.rows.length === 0) {
       await client.query(`CREATE DATABASE "${dbName}"`);
     }
+  } finally {
+    await client.end();
+  }
+}
+
+// Helper to run tenant init.sql on new database
+async function initializeTenantDatabase(dbName) {
+  const initSqlPath = path.join(__dirname, '../database/tenant/init.sql');
+  const initSql = fs.readFileSync(initSqlPath, 'utf8');
+  
+  const { Client } = require('pg');
+  const client = new Client({
+    host: process.env.MAIN_DB_HOST || 'kitchen-erp-main-db',
+    port: process.env.MAIN_DB_PORT || 5432,
+    user: process.env.MAIN_DB_USER || 'erp_admin',
+    password: process.env.MAIN_DB_PASSWORD || 'erp_secure_password_123',
+    database: dbName
+  });
+  await client.connect();
+  try {
+    await client.query(initSql);
   } finally {
     await client.end();
   }
@@ -51,7 +74,7 @@ router.get('/tenants', async (req, res) => {
   }
 });
 
-// POST /api/master/tenants - create tenant
+// POST /api/master/tenants - create tenant with full provisioning
 router.post('/tenants', async (req, res) => {
   try {
     const { name, contact_first_name, contact_last_name, address_street, address_city, address_state, address_zip, contact_email, contact_phone, status } = req.body;
@@ -74,18 +97,28 @@ router.post('/tenants', async (req, res) => {
       suffix++;
       dbName = `${baseDbName}_${suffix}`;
     }
-    
+
     // Create database
     await createTenantDatabase(dbName);
-    
+
+    // Insert tenant into main DB
     const result = await mainPool.query(
       `INSERT INTO tenants (name, db_name, contact_first_name, contact_last_name, address_street, address_city, address_state, address_zip, contact_email, contact_phone, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [name, dbName, contact_first_name, contact_last_name, address_street, address_city, address_state, address_zip, contact_email, contact_phone, status || 'active']
     );
-    
-    res.status(201).json(result.rows[0]);
+
+    const tenant = result.rows[0];
+
+    // Initialize tenant database with init.sql
+    await initializeTenantDatabase(dbName);
+
+    // Example: Create initial SuperAdmin membership for the creating user (assumes SuperAdmin is authenticated)
+    // In production, you'd get the authenticated user ID from JWT
+    // For now, skip or add optional admin_user_id in request body
+
+    res.status(201).json(tenant);
   } catch (error) {
     console.error('Error creating tenant:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -116,10 +149,17 @@ router.put('/tenants/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/master/tenants/:id - delete tenant
+// DELETE /api/master/tenants/:id - delete tenant (and drop DB?)
 router.delete('/tenants/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    // Get db_name first to drop DB (optional)
+    const tenant = await mainPool.query('SELECT db_name FROM tenants WHERE id = $1', [id]);
+    if (tenant.rows.length > 0) {
+      const dbName = tenant.rows[0].db_name;
+      // Drop database (optional, be careful!)
+      // await mainPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+    }
     await mainPool.query('DELETE FROM tenants WHERE id = $1', [id]);
     res.json({ message: 'Tenant deleted successfully' });
   } catch (error) {
@@ -128,71 +168,23 @@ router.delete('/tenants/:id', async (req, res) => {
   }
 });
 
-// GET /api/master/tenant-admins - list tenant admins
-router.get('/tenant-admins', async (req, res) => {
-  try {
-    const result = await mainPool.query(`
-      SELECT u.*, 
-             json_agg(json_build_object('tenant_id', tu.tenant_id, 'tenant_name', t.name)) as tenants
-      FROM users u
-      LEFT JOIN tenant_users tu ON u.id = tu.user_id
-      LEFT JOIN tenants t ON tu.tenant_id = t.id
-      WHERE u.role = 'tenant_admin'
-      GROUP BY u.id
-      ORDER BY u.created_at DESC
-    `);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching tenant admins:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// POST /api/master/tenant-admins - create tenant admin
-router.post('/tenant-admins', async (req, res) => {
-  try {
-    const { first_name, last_name, email, password, tenant_ids } = req.body;
-    
-    const password_hash = await bcrypt.hash(password, 10);
-    
-    const userResult = await mainPool.query(
-      `INSERT INTO users (email, password_hash, role, first_name, last_name)
-       VALUES ($1, $2, 'tenant_admin', $3, $4)
-       RETURNING *`,
-      [email, password_hash, first_name, last_name]
-    );
-    
-    const user = userResult.rows[0];
-    
-    if (tenant_ids && Array.isArray(tenant_ids)) {
-      for (const tenantId of tenant_ids) {
-        await mainPool.query(
-          `INSERT INTO tenant_users (user_id, tenant_id, role)
-           VALUES ($1, $2, 'tenant_admin')
-           ON CONFLICT (user_id, tenant_id) DO NOTHING`,
-          [user.id, tenantId]
-        );
-      }
-    }
-    
-    res.status(201).json(user);
-  } catch (error) {
-    console.error('Error creating tenant admin:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /api/master/users - list users with optional role filter
+// GET /api/master/users - list users with optional role filter (via memberships)
 router.get('/users', async (req, res) => {
   try {
     const { role } = req.query;
-    let query = 'SELECT id, email, first_name, last_name, role FROM users WHERE 1=1';
+    let query = `
+      SELECT u.id, u.email, u.first_name, u.last_name, 
+             json_agg(json_build_object('tenant_id', m.tenant_id, 'role', m.role, 'tenant_name', t.name)) as memberships
+      FROM users u
+      LEFT JOIN memberships m ON u.id = m.user_id
+      LEFT JOIN tenants t ON m.tenant_id = t.id
+    `;
     const params = [];
     if (role) {
-      query += ' AND role = $1';
+      query += ' WHERE m.role = $1';
       params.push(role);
     }
-    query += ' ORDER BY created_at DESC';
+    query += ' GROUP BY u.id ORDER BY u.created_at DESC';
     const result = await mainPool.query(query, params);
     res.json(result.rows);
   } catch (error) {
@@ -201,35 +193,37 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// POST /api/master/tenants/:id/assign-admin - assign a user as tenant admin
-router.post('/tenants/:id/assign-admin', async (req, res) => {
+// POST /api/master/invite - invite user to tenant (create membership)
+router.post('/invite', async (req, res) => {
   try {
-    const { id } = req.params;
-    const { user_id } = req.body;
+    const { email, tenant_id, role } = req.body;
     
-    // Verify tenant exists
-    const tenantCheck = await mainPool.query('SELECT * FROM tenants WHERE id = $1', [id]);
-    if (tenantCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Tenant not found' });
+    // Check if user exists, if not create them
+    let userResult = await mainPool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (userResult.rows.length === 0) {
+      // Create new user with temporary password (or send setup email)
+      const tempPassword = Math.random().toString(36).slice(-8);
+      const password_hash = await bcrypt.hash(tempPassword, 10);
+      userResult = await mainPool.query(
+        `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING *`,
+        [email, password_hash]
+      );
     }
-    
-    // Verify user exists and is tenant_admin role
-    const userCheck = await mainPool.query('SELECT * FROM users WHERE id = $1 AND role = $2', [user_id, 'tenant_admin']);
-    if (userCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found or not a tenant admin' });
-    }
-    
-    // Assign user to tenant (insert or update)
-    await mainPool.query(
-      `INSERT INTO tenant_users (user_id, tenant_id, role)
-       VALUES ($1, $2, 'tenant_admin')
-       ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = 'tenant_admin'`,
-      [user_id, id]
+    const user = userResult.rows[0];
+
+    // Create membership
+    const membershipResult = await mainPool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role) VALUES ($1, $2, $3) RETURNING *`,
+      [user.id, tenant_id, role]
     );
-    
-    res.json({ message: 'Admin assigned successfully' });
+
+    // Send onboarding email (stub: <under construction>)
+    // TODO: Implement actual email sending
+    console.log(`Onboarding email to ${email}: <under construction>`);
+
+    res.status(201).json(membershipResult.rows[0]);
   } catch (error) {
-    console.error('Error assigning admin:', error);
+    console.error('Error inviting user:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import apiFetch from '../api';
 
 function Dashboard() {
   const [stats, setStats] = useState({
@@ -7,6 +8,9 @@ function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedTenantName, setSelectedTenantName] = useState(
+    () => localStorage.getItem('selectedTenantName') || ''
+  );
 
   useEffect(() => {
     fetchStats();
@@ -14,11 +18,7 @@ function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      const token = localStorage.getItem('token');
-      
-      const response = await fetch('http://localhost:3000/api/dashboard/stats', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await apiFetch('http://localhost:3000/api/dashboard/stats');
       
       if (!response.ok) {
         throw new Error('Failed to load dashboard stats');
@@ -43,7 +43,9 @@ function Dashboard() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">
+        Dashboard {selectedTenantName ? `- ${selectedTenantName}` : ''}
+      </h1>
       
       {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
       
