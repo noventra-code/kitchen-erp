@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useNotification, RibbonNotification, useModal, Modal } from '../components/NotificationSystem';
+import apiFetch from '../api';
 
 const InvoiceView = () => {
   const { id } = useParams();

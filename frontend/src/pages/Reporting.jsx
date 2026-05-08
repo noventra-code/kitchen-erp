@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import apiFetch from '../api';
 
 function Reporting() {
   const [summary, setSummary] = useState(null);

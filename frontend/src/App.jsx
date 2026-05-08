@@ -65,12 +65,15 @@ function App() {
     return () => window.removeEventListener('templateChanged', handleTemplateChange);
   }, []);
 
+  // Check if user is super_admin
+  const isSuperAdmin = user && (user.role === 'super_admin' || (user.memberships && user.memberships.some(m => m.role === 'SuperAdmin')));
+  
   // Fetch tenants for super_admin
   useEffect(() => {
-    if (user && user.role === 'super_admin') {
+    if (isSuperAdmin) {
       fetchTenants();
     }
-  }, [user]);
+  }, [isSuperAdmin]);
 
   const fetchTenants = async () => {
     try {
@@ -135,7 +138,7 @@ function App() {
                   </Link>
                   
                   {/* Tenant Selector for Super Admin */}
-                  {user && user.role === 'super_admin' && (
+                  {isSuperAdmin && (
                     <div className="flex items-center space-x-2">
                       <select
                         value={selectedTenantId}

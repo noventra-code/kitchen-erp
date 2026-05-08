@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import InvoiceForm from '../components/InvoiceForm';
+import apiFetch from '../api';
 
 const InvoiceNew = () => {
   const navigate = useNavigate();

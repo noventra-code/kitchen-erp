@@ -77,7 +77,7 @@ function CogProfile({ currentTemplate }) {
                 ? 'bg-blue-100 text-blue-800'
                 : 'bg-gray-100 text-gray-800'
             }`}>
-              {user.role.replace('_', ' ')}
+              {(user.role || '').replace('_', ' ')}
             </span>
           </div>
 

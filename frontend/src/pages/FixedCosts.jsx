@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useNotification, useModal, RibbonNotification, Modal } from '../components/NotificationSystem';
+import apiFetch from '../api';
 
 // Format number with commas for thousands
 function formatCurrency(value) {

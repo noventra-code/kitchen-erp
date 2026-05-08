@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import apiFetch from '../api';
 
 function Profile() {
   const [user, setUser] = useState(null);

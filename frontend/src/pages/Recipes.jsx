@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useNotification, useModal, RibbonNotification, Modal } from '../components/NotificationSystem';
+import apiFetch from '../api';
 
 // Stable ID generator for ingredients list
 function useStableId() {

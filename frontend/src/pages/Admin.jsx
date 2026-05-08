@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNotification, useModal, RibbonNotification, Modal } from '../components/NotificationSystem';
+import apiFetch from '../api';
 
 function Admin() {
   const [laborRates, setLaborRates] = useState([]);
