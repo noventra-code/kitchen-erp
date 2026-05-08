@@ -68,6 +68,24 @@ Using **superpowers methodology** (from obra/superpowers) as core mindset:
 6. **COMPLEXITY REDUCTION** - Simplicity as primary goal, YAGNI, DRY
 7. **SUBAGENT-DRIVEN DEVELOPMENT** - Dispatch subagents per task with two-stage review
 
+## Multi-Tenant Architecture Reference (Adopted 2026-05-07)
+
+Using **frontegg.com/guides/multi-tenant-architecture** as reference for all multi-tenant work:
+
+**3 Types of Multi-Tenant Architecture:**
+1. **Single App, Single DB** - Simplest, but security risks (not recommended)
+2. **Single App, Multiple DBs** ← **Kitchen ERP uses this** (best balance of isolation vs. complexity)
+3. **Multiple App, Multiple DBs** - Highest isolation, but highest complexity/cost
+
+**Key Best Practices:**
+- Always use tenant context in every request (X-Tenant-ID header + tenantContext middleware)
+- Isolate data at database level (separate DB per tenant)
+- Per-tenant roles via memberships table (not global roles)
+- Authentication: User → memberships lookup → tenant selection → tenant context in all requests
+- Security: Defense in depth (middleware + controller checks + audit logs)
+
+**Skill Created:** `/root/.hermes/skills/software-development/multi-tenant-architecture-guide/SKILL.md`
+
 ---
 
 ## Database State
