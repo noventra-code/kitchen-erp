@@ -5,24 +5,31 @@ function TenantSelector() {
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState(null);
+  const [memberships, setMemberships] = useState([]);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
+    const membershipsStr = localStorage.getItem('memberships');
+    
     if (userStr) {
       try {
         const parsedUser = JSON.parse(userStr);
         setUser(parsedUser);
         
+        // Load memberships from localStorage
+        if (membershipsStr) {
+          const parsedMemberships = JSON.parse(membershipsStr);
+          setMemberships(parsedMemberships);
+        }
+        
         // Load selected tenant from localStorage
         const savedTenant = localStorage.getItem('selectedTenantId');
         if (savedTenant) {
           setSelectedTenant(savedTenant);
-        } else if (parsedUser.tenant_id) {
-          setSelectedTenant(parsedUser.tenant_id);
         }
       } catch (e) {
-        console.error('Failed to parse user data');
+        console.error('Failed to parse user/memberships data');
       }
     }
 
@@ -36,12 +43,26 @@ function TenantSelector() {
   }, []);
 
   useEffect(() => {
-    if (user && (user.role === 'super_admin' || user.role === 'tenant_admin')) {
-      fetchTenants();
+    // SuperAdmin: fetch all tenants from API
+    // Regular users: use their memberships from localStorage
+    if (user && memberships.length > 0) {
+      const isSuperAdmin = memberships.some(m => m.role === 'SuperAdmin');
+      if (isSuperAdmin) {
+        fetchAllTenants();
+      } else {
+        // Use memberships as the tenant list
+        const userTenants = memberships.map(m => ({
+          id: m.tenant_id,
+          name: m.tenant_name,
+          db_name: m.db_name,
+          role: m.role
+        }));
+        setTenants(userTenants);
+      }
     }
-  }, [user]);
+  }, [user, memberships]);
 
-  const fetchTenants = async () => {
+  const fetchAllTenants = async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:3000/api/master/tenants', {
@@ -62,18 +83,30 @@ function TenantSelector() {
   const handleTenantSelect = (tenantId) => {
     setSelectedTenant(tenantId);
     localStorage.setItem('selectedTenantId', tenantId);
+    
+    // Update selected tenant name
+    const tenant = tenants.find(t => t.id.toString() === tenantId.toString());
+    if (tenant) {
+      localStorage.setItem('selectedTenantName', tenant.name || '');
+    }
+    
     setIsOpen(false);
     
     // Dispatch event to notify other components
     window.dispatchEvent(new CustomEvent('tenantChanged', { detail: { tenantId } }));
+    
+    // Reload page to refresh all data with new tenant context
+    window.location.reload();
   };
 
-  if (!user || (user.role !== 'super_admin' && user.role !== 'tenant_admin')) {
+  // Don't render if not logged in or no memberships
+  if (!user || memberships.length === 0) {
     return null;
   }
 
-  const currentTenant = tenants.find(t => t.id === selectedTenant) || 
-                        tenants.find(t => t.id === user.tenant_id);
+  const currentTenant = tenants.find(t => 
+    t.id.toString() === (selectedTenant || '').toString()
+  );
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -91,30 +124,30 @@ function TenantSelector() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+        <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
           <div className="px-4 py-2 border-b border-gray-100">
             <p className="text-xs font-medium text-gray-500 uppercase">Switch Tenant</p>
           </div>
           {tenants.map((tenant) => (
             <button
               key={tenant.id}
-              onClick={() => handleTenantSelect(tenant.id)}
+              onClick={() => handleTenantSelect(tenant.id.toString())}
               className={`block w-full text-left px-4 py-2 text-sm ${
-                selectedTenant === tenant.id
+                (selectedTenant || '').toString() === tenant.id.toString()
                   ? 'bg-blue-50 text-blue-700 font-medium'
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span>{tenant.name}</span>
-                {selectedTenant === tenant.id && (
+                {(selectedTenant || '').toString() === tenant.id.toString() && (
                   <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 )}
               </div>
-              {tenant.subdomain && (
-                <p className="text-xs text-gray-500">{tenant.subdomain}</p>
+              {tenant.role && (
+                <p className="text-xs text-gray-500">Role: {tenant.role}</p>
               )}
             </button>
           ))}

@@ -588,49 +588,10 @@ app.get('/api/dashboard/stats', tenantContext, async (req, res) => {
   }
 });
 
-// Helper function to get tenant database
-const getTenantDb = async (req) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    throw new Error('No token provided');
-  }
-
-  const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production');
-
-  if (!decoded.tenant_id) {
-    throw new Error('Tenant context required');
-  }
-
-  const tenantResult = await mainPool.query(
-    'SELECT db_name FROM tenants WHERE id = $1',
-    [decoded.tenant_id]
-  );
-
-  if (tenantResult.rows.length === 0) {
-    throw new Error('Tenant not found');
-  }
-
-  const dbName = tenantResult.rows[0].db_name;
-
-  if (!tenantPools.has(dbName)) {
-    const tenantPool = new Pool({
-      host: process.env.MAIN_DB_HOST || 'localhost',
-      port: process.env.MAIN_DB_PORT || 5432,
-      database: dbName,
-      user: process.env.MAIN_DB_USER || 'erp_admin',
-      password: process.env.MAIN_DB_PASSWORD || 'erp_secure_password_123',
-    });
-    tenantPools.set(dbName, tenantPool);
-  }
-
-  return tenantPools.get(dbName);
-};
-
 // Fixed Costs - Get all
-app.get('/api/fixed-costs', async (req, res) => {
+app.get('/api/fixed-costs', tenantContext, async (req, res) => {
   try {
-    const tenantDb = await getTenantDb(req);
-    const result = await tenantDb.query('SELECT * FROM fixed_costs ORDER BY created_at DESC');
+    const result = await req.tenantDb.query('SELECT * FROM fixed_costs ORDER BY created_at DESC');
     res.json(result.rows.map(row => ({
       ...row,
       value: parseFloat(row.value)
@@ -642,16 +603,15 @@ app.get('/api/fixed-costs', async (req, res) => {
 });
 
 // Fixed Costs - Create
-app.post('/api/fixed-costs', async (req, res) => {
+app.post('/api/fixed-costs', tenantContext, async (req, res) => {
   try {
-    const tenantDb = await getTenantDb(req);
     const { item, type, value } = req.body;
 
     if (!item || !type || value === undefined) {
       return res.status(400).json({ error: 'Item, type, and value are required' });
     }
 
-    const result = await tenantDb.query(
+    const result = await req.tenantDb.query(
       'INSERT INTO fixed_costs (item, type, value) VALUES ($1, $2, $3) RETURNING *',
       [item, type, parseFloat(value)]
     );
@@ -667,9 +627,8 @@ app.post('/api/fixed-costs', async (req, res) => {
 });
 
 // Fixed Costs - Update
-app.put('/api/fixed-costs/:id', async (req, res) => {
+app.put('/api/fixed-costs/:id', tenantContext, async (req, res) => {
   try {
-    const tenantDb = await getTenantDb(req);
     const { id } = req.params;
     const { item, type, value } = req.body;
 
@@ -677,7 +636,7 @@ app.put('/api/fixed-costs/:id', async (req, res) => {
       return res.status(400).json({ error: 'Item, type, and value are required' });
     }
 
-    const result = await tenantDb.query(
+    const result = await req.tenantDb.query(
       'UPDATE fixed_costs SET item = $1, type = $2, value = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
       [item, type, parseFloat(value), id]
     );
@@ -697,12 +656,11 @@ app.put('/api/fixed-costs/:id', async (req, res) => {
 });
 
 // Fixed Costs - Delete
-app.delete('/api/fixed-costs/:id', async (req, res) => {
+app.delete('/api/fixed-costs/:id', tenantContext, async (req, res) => {
   try {
-    const tenantDb = await getTenantDb(req);
     const { id } = req.params;
 
-    const result = await tenantDb.query(
+    const result = await req.tenantDb.query(
       'DELETE FROM fixed_costs WHERE id = $1 RETURNING id',
       [id]
     );

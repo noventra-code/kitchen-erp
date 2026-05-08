@@ -26,91 +26,25 @@ function App() {
   const navigate = useNavigate();
   const isLoginPage = location.pathname === '/login';
 
-  // Get user for menu visibility
+  // Get user and memberships for menu visibility
   const userStr = localStorage.getItem('user');
+  const membershipsStr = localStorage.getItem('memberships');
   const user = userStr ? JSON.parse(userStr) : null;
+  const memberships = membershipsStr ? JSON.parse(membershipsStr) : [];
 
   // Track current template
   const [currentTemplate, setCurrentTemplate] = useState(() => {
     return localStorage.getItem('selectedTemplate') || 'modern';
   });
 
-  // Tenant switching state (for super_admin)
-  const [tenants, setTenants] = useState([]);
-  const [selectedTenantId, setSelectedTenantId] = useState(() => {
-    return localStorage.getItem('selectedTenantId') || '';
-  });
-  const [selectedTenantName, setSelectedTenantName] = useState(() => {
-    return localStorage.getItem('selectedTenantName') || '';
-  });
-
-  // Apply saved template on load
-  useEffect(() => {
-    const savedTemplate = localStorage.getItem('selectedTemplate') || 'modern';
-    document.body.classList.remove('template-modern', 'template-red-grey');
-    document.body.classList.add(`template-${savedTemplate}`);
-    setCurrentTemplate(savedTemplate);
-  }, []);
-
-  // Listen for template changes from other components (e.g., Profile page)
-  useEffect(() => {
-    const handleTemplateChange = (event) => {
-      const newTemplate = event.detail.template;
-      document.body.classList.remove('template-modern', 'template-red-grey');
-      document.body.classList.add(`template-${newTemplate}`);
-      setCurrentTemplate(newTemplate);
-    };
-
-    window.addEventListener('templateChanged', handleTemplateChange);
-    return () => window.removeEventListener('templateChanged', handleTemplateChange);
-  }, []);
-
-  // Check if user is super_admin
-  const isSuperAdmin = user && (user.role === 'super_admin' || (user.memberships && user.memberships.some(m => m.role === 'SuperAdmin')));
+  // Check if user is super_admin (has SuperAdmin role in any membership)
+  const isSuperAdmin = memberships.some(m => m.role === 'SuperAdmin');
   
-  // Fetch tenants for super_admin
-  useEffect(() => {
-    if (isSuperAdmin) {
-      fetchTenants();
-    }
-  }, [isSuperAdmin]);
-
-  const fetchTenants = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/api/master/tenants', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTenants(data);
-      }
-    } catch (err) {
-      console.error('Error fetching tenants:', err);
-    }
-  };
-
-  const handleTenantChange = (e) => {
-    const newTenantId = e.target.value;
-    const newTenantName = e.target.options[e.target.selectedIndex].text;
-    
-    setSelectedTenantId(newTenantId);
-    setSelectedTenantName(newTenantId ? newTenantName : '');
-    
-    localStorage.setItem('selectedTenantId', newTenantId);
-    localStorage.setItem('selectedTenantName', newTenantId ? newTenantName : '');
-    
-    // Update user object in localStorage to reflect the tenant change
-    if (user) {
-      const updatedUser = { ...user, tenant_id: newTenantId ? parseInt(newTenantId) : null };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-    }
-    
-    // Reload the page to refresh all data with new tenant context
-    window.location.reload();
-  };
+  // Check if user is tenant_admin (has TenantAdmin role in any membership)
+  const isTenantAdmin = memberships.some(m => m.role === 'TenantAdmin');
+  
+  // User can access admin pages if they are SuperAdmin or TenantAdmin
+  const canAccessAdmin = isSuperAdmin || isTenantAdmin;
 
   const handleNavClick = (path) => {
     navigate(path);
@@ -118,7 +52,10 @@ function App() {
 
   // Get the display name for the header
   const getHeaderTitle = () => {
-    if (user && user.role === 'super_admin' && selectedTenantName && selectedTenantId) {
+    const selectedTenantName = localStorage.getItem('selectedTenantName');
+    const selectedTenantId = localStorage.getItem('selectedTenantId');
+    
+    if (user && isSuperAdmin && selectedTenantName && selectedTenantId) {
       return `Kitchen ERP - ${selectedTenantName}`;
     }
     return 'Kitchen ERP';
@@ -136,28 +73,6 @@ function App() {
                   <Link to="/dashboard" className={`text-xl font-bold ${currentTemplate === 'red-grey' ? 'text-white' : 'text-gray-900'}`}>
                     {getHeaderTitle()}
                   </Link>
-                  
-                  {/* Tenant Selector for Super Admin */}
-                  {isSuperAdmin && (
-                    <div className="flex items-center space-x-2">
-                      <select
-                        value={selectedTenantId}
-                        onChange={handleTenantChange}
-                        className={`text-sm rounded-md border ${
-                          currentTemplate === 'red-grey' 
-                            ? 'bg-red-700 text-white border-red-600' 
-                            : 'bg-white text-gray-900 border-gray-300'
-                        } px-3 py-1`}
-                      >
-                        <option value="">SUPER ADMIN (No Tenant)</option>
-                        {tenants.map(tenant => (
-                          <option key={tenant.id} value={tenant.id}>
-                            {tenant.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
                   
                   {/* Top Menu */}
                   {user && (
@@ -212,22 +127,22 @@ function App() {
                       >
                         Reporting
                       </button>
-                      {(user.role === 'tenant_admin' || user.role === 'super_admin') && (
+                      {canAccessAdmin && (
                         <>
-                          {/* Tenant Admin button - visible to super_admin and tenant_admin */}
+                          {/* Admin button - visible to SuperAdmin and TenantAdmin */}
                           <button
-                            onClick={() => handleNavClick(user.role === 'super_admin' ? '/super-admin' : '/admin')}
+                            onClick={() => handleNavClick(isSuperAdmin ? '/super-admin' : '/admin')}
                             className={`px-3 py-2 text-sm font-medium rounded-md ${
                               location.pathname === '/admin' || location.pathname === '/super-admin'
                                 ? (currentTemplate === 'red-grey' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-900')
                                 : (currentTemplate === 'red-grey' ? 'text-red-100 hover:text-white hover:bg-red-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50')
                             }`}
                           >
-                            {user.role === 'super_admin' ? 'Tenant Admin' : 'Admin'}
+                            {isSuperAdmin ? 'Tenant Admin' : 'Admin'}
                           </button>
                           
-                          {/* Admin button - only visible to super_admin */}
-                          {user.role === 'super_admin' && (
+                          {/* Super Admin button - only visible to SuperAdmin */}
+                          {isSuperAdmin && (
                             <button
                               onClick={() => handleNavClick('/admin')}
                               className={`px-3 py-2 text-sm font-medium rounded-md ${

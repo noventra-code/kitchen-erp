@@ -36,8 +36,30 @@ function Login() {
         password,
       });
 
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      const { token, user, memberships } = response.data;
+      
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      // Save memberships to localStorage
+      if (memberships && memberships.length > 0) {
+        localStorage.setItem('memberships', JSON.stringify(memberships));
+        
+        // Auto-select tenant if user has exactly one membership
+        if (memberships.length === 1) {
+          const singleTenant = memberships[0];
+          localStorage.setItem('selectedTenantId', singleTenant.tenant_id.toString());
+          localStorage.setItem('selectedTenantName', singleTenant.tenant_name || '');
+        } else {
+          // Multiple memberships - clear any previously selected tenant
+          localStorage.removeItem('selectedTenantId');
+          localStorage.removeItem('selectedTenantName');
+        }
+      } else {
+        localStorage.setItem('memberships', JSON.stringify([]));
+        localStorage.removeItem('selectedTenantId');
+        localStorage.removeItem('selectedTenantName');
+      }
       
       // Always redirect to dashboard
       navigate('/dashboard');
